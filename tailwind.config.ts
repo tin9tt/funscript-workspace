@@ -22,6 +22,16 @@ export default {
       error: '#e00000',
       'error-content': '#ffffff',
     },
+    backgroundImage: {
+      'lattice-primary-content-8-light': `
+        repeating-linear-gradient(90deg, rgba(42,40,50, 0.06), rgba(42,40,50, 0.06) 1px, transparent 1px, transparent 32px),
+        repeating-linear-gradient(0deg, rgba(42,40,50, 0.06), rgba(42,40,50, 0.06) 1px, var(--background) 1px, var(--background) 32px)
+      `,
+      'lattice-primary-content-8-dark': `
+        repeating-linear-gradient(90deg, rgba(42,40,50, 0.4), rgba(42,40,50, 0.4) 1px, transparent 1px, transparent 32px),
+        repeating-linear-gradient(0deg, rgba(42,40,50, 0.4), rgba(42,40,50, 0.4) 1px, var(--background) 1px, var(--background) 32px)
+      `,
+    },
   },
   plugins: [],
 } satisfies Config

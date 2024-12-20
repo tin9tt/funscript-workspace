@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .bg-lattice-primary-content-8 {
+    @apply bg-lattice-primary-content-8-light dark:bg-lattice-primary-content-8-dark;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none; /* IE, Edge 対応 */
+    scrollbar-width: none; /* Firefox 対応 */
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    /* Chrome, Safari 対応 */
+    display: none;
+  }
+}
+
 :root {
   --background: #f2f2f2;
   --foreground: #0a0a0a;

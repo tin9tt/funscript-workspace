@@ -2,12 +2,11 @@
 
 import clsx from 'clsx'
 import Link from 'next/link'
-import { ReactNode } from 'react'
-import FileSVG from '@/assets/images/file.svg'
+import { HTMLAttributes, ReactNode } from 'react'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
-type Navigation = {
+export type Navigation = {
   title: string
   href: string
   image:
@@ -15,36 +14,35 @@ type Navigation = {
     | { kind: 'node'; node: ReactNode }
 }
 
-export const NAVIGATIONS: Navigation[] = [
-  {
-    title: 'Scripts',
-    href: '/scripts',
-    image: {
-      kind: 'node',
-      node: <FileSVG className={clsx('fill-foreground')} />,
-    },
-  },
-]
-
-export const Sidebar = () => {
+export const Sidebar = ({
+  className,
+  navigations,
+}: HTMLAttributes<HTMLDivElement> & { navigations: Navigation[] }) => {
   const pathname = usePathname()
 
   return (
     <div
       className={clsx(
-        ['min-h-screen', 'w-[240px]'],
+        ['min-h-screen'],
         ['shadow-lg', 'shadow-primary-variant', 'rounded-r-lg'],
-        ['pt-32'],
+        ['pt-32', 'bg-background'],
+        className,
       )}
     >
-      {NAVIGATIONS.map((nav, i) => (
+      {navigations.map((nav, i) => (
         <Link
           key={`nav-${i}`}
           href={nav.href}
           className={clsx(
             ['m-2'],
             ['flex', 'items-center', 'p-2', 'gap-2'],
-            ['hover:bg-primary/30', 'rounded-md'],
+            [
+              'hover:bg-primary-content/30',
+              'hover:outline',
+              'hover:outline-1',
+              'hover:outline-primary/40',
+              'rounded-md',
+            ],
             pathname.startsWith(nav.href) && 'bg-primary-variant/20',
           )}
         >

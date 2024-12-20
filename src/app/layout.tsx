@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import clsx from 'clsx'
-import { Sidebar } from './_components/Sidebar'
+import { Navigation, Sidebar } from './_components/Sidebar'
 import { AuthContextProvider } from './_hooks/auth/context'
+import FileSVG from '@/assets/images/file.svg'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -20,6 +21,17 @@ export const metadata: Metadata = {
   description: 'Funscript player and editor that works with video and audio.',
 }
 
+const navigations: Navigation[] = [
+  {
+    title: 'Scripts',
+    href: '/scripts',
+    image: {
+      kind: 'node',
+      node: <FileSVG className={clsx('fill-foreground')} />,
+    },
+  },
+]
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,11 +44,21 @@ export default function RootLayout({
           className={clsx(
             [geistSans.variable, geistMono.variable, 'antialiased'],
             ['min-h-screen', 'w-full'],
+            ['flex', 'bg-lattice-primary-content-8'],
           )}
         >
-          <div className={clsx('flex')}>
-            <Sidebar />
-            <div className={clsx('m-8')}>{children}</div>
+          <Sidebar
+            navigations={navigations}
+            className={clsx('w-[240px]', 'min-w-[240px]')}
+          />
+          <div
+            className={clsx(
+              ['w-full', 'max-w-[calc(100%-240px)]'],
+              'p-8',
+              'bg-[top_left_-16px]',
+            )}
+          >
+            {children}
           </div>
         </body>
       </AuthContextProvider>
