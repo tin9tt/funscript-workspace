@@ -1,7 +1,7 @@
 import { FunscriptAction } from '@/lib/funscript'
 import clsx from 'clsx'
 
-export const Graph = ({ actions }: { actions: FunscriptAction[] }) => {
+export const ScriptGraph = ({ actions }: { actions: FunscriptAction[] }) => {
   return (
     <div
       className={clsx(
