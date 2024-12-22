@@ -2,6 +2,7 @@ import { FunscriptAction } from '@/lib/funscript'
 import { Card } from '../_components/common'
 import { ScriptGraph } from './_components/ScriptGraph'
 import clsx from 'clsx'
+import { AudioGraph } from './_components/AudioGraph'
 
 const s = 1000
 
@@ -19,7 +20,12 @@ const roundtrip = (
 
 export default function Scripts() {
   return (
-    <>
+    <div className={clsx('grid', 'gap-8')}>
+      <Card className={clsx('py-8', 'grid', 'gap-8')}>
+        <div>
+          <AudioGraph />
+        </div>
+      </Card>
       <Card className={clsx('py-8', 'grid', 'gap-8')}>
         <ScriptGraph
           actions={[
@@ -50,6 +56,6 @@ export default function Scripts() {
           ]}
         />
       </Card>
-    </>
+    </div>
   )
 }
