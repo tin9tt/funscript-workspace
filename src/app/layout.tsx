@@ -54,7 +54,6 @@ export default function RootLayout({
           <div
             className={clsx(
               ['w-full', 'max-w-[calc(100%-240px)]'],
-              'p-8',
               'bg-[top_left_-16px]',
             )}
           >

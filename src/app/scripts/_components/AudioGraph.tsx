@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import WavesurferPlayer from '@wavesurfer/react'
 import clsx from 'clsx'
 import { AudioSelector } from './AudioSelector'
@@ -8,8 +8,10 @@ import WaveSurfer from 'wavesurfer.js'
 import { useSeekContext } from '../_hooks/seek'
 
 export const AudioGraph = ({
+  file,
   graphLeftPaddingPercentage,
 }: {
+  file?: File
   /** percentage of width as [0..1] (0 = 0%, 1 = 100%) */
   graphLeftPaddingPercentage: number
 }) => {
@@ -19,6 +21,11 @@ export const AudioGraph = ({
     setURL(URL.createObjectURL(file))
     setName(file.name)
   }
+  useLayoutEffect(() => {
+    if (file && file.type.split('/')[0] === 'audio') {
+      onAudioFileSelected(file)
+    }
+  }, [file])
 
   const [wavesurfer, setWavesurfer] = useState<WaveSurfer | undefined>()
   const onReady = (ws: WaveSurfer) => {
