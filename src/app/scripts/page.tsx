@@ -22,9 +22,7 @@ export default function Scripts() {
   return (
     <div className={clsx('grid', 'gap-8')}>
       <Card className={clsx('py-8', 'grid', 'gap-8')}>
-        <div>
-          <AudioGraph />
-        </div>
+        <AudioGraph graphLeftPaddingPercentage={0.25} />
       </Card>
       <Card className={clsx('py-8', 'grid', 'gap-8')}>
         <ScriptGraph
@@ -54,6 +52,7 @@ export default function Scripts() {
             { at: 42 * s, pos: 50 },
             { at: 42.5 * s, pos: 100 },
           ]}
+          graphLeftPaddingPercentage={0.25}
         />
       </Card>
     </div>

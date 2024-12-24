@@ -1,7 +1,7 @@
 import { useContext } from 'react'
 import { SeekContext } from './context'
 
-export const useSeekContext = () => {
+export const useSeekContext = (from: 1 | 2) => {
   const { state, dispatch } = useContext(SeekContext)
 
   const init = (duration: number) => {
@@ -9,12 +9,21 @@ export const useSeekContext = () => {
   }
 
   const seek = (currentTime: number) => {
-    dispatch({ kind: 'seek', payload: { currentTime } })
+    switch (from) {
+      case 1:
+        dispatch({ kind: 'seek.from1', payload: { currentTime } })
+        break
+      case 2:
+        dispatch({ kind: 'seek.from2', payload: { currentTime } })
+        break
+    }
   }
 
   return {
     duration: state.duration,
-    currentTime: state.currentTime,
+    number: from,
+    seeking: state.seeking,
+    currentTime: state[from].currentTime,
     init,
     seek,
   }

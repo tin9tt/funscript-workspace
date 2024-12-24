@@ -4,27 +4,59 @@ import { FunscriptAction } from '@/lib/funscript'
 import clsx from 'clsx'
 import { useSeekContext } from '../_hooks/seek'
 import { useEffect, useRef } from 'react'
-import { scrollToQuarter } from '../_hooks/seek/tool'
 
-export const ScriptGraph = ({ actions }: { actions: FunscriptAction[] }) => {
-  const { duration, currentTime } = useSeekContext()
+export const ScriptGraph = ({
+  actions,
+  graphLeftPaddingPercentage,
+}: {
+  actions: FunscriptAction[]
+  /** percentage of width as [0..1] (0 = 0%, 1 = 100%) */
+  graphLeftPaddingPercentage: number
+}) => {
+  const {
+    duration,
+    number,
+    seeking,
+    currentTime,
+    seek: seekState,
+  } = useSeekContext(2)
   const graphContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    scrollToQuarter(graphContainerRef, currentTime)
-  }, [currentTime])
+    graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
+  }, [currentTime, graphLeftPaddingPercentage])
 
   return (
     <div
       className={clsx(
-        ['w-full', 'max-w-full'],
+        ['w-full', 'max-w-full', 'flex'],
         ['overflow-x-scroll', 'scrollbar-hidden'],
         ['overflow-y-visible', 'py-1', '-my-1'],
       )}
       ref={graphContainerRef}
+      onWheel={(e) => {
+        const seekTime = e.currentTarget.scrollLeft / 100
+        seekState(seekTime)
+      }}
+      onScroll={(e) => {
+        if (seeking !== number) {
+          return
+        }
+        const seekTime = e.currentTarget.scrollLeft / 100
+        seekState(seekTime)
+      }}
     >
       <div
+        className={clsx('h-auto')}
+        style={{
+          minWidth:
+            (graphContainerRef.current?.clientWidth ?? 0) *
+            graphLeftPaddingPercentage,
+        }}
+        onClick={() => seekState(0)}
+      />
+      <div
         className={clsx('relative', 'flex')}
-        style={{ width: duration * 100 }}
+        style={{ width: duration * 100, minWidth: duration * 100 }}
       >
         {actions.map((action, i) => {
           const next = actions[i + 1]
@@ -50,6 +82,15 @@ export const ScriptGraph = ({ actions }: { actions: FunscriptAction[] }) => {
           )
         })}
       </div>
+      <div
+        className={clsx('h-auto')}
+        style={{
+          minWidth:
+            (graphContainerRef.current?.clientWidth ?? 0) *
+            (1 - graphLeftPaddingPercentage),
+        }}
+        onClick={() => seekState(duration)}
+      />
     </div>
   )
 }

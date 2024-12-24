@@ -6,9 +6,13 @@ import clsx from 'clsx'
 import { AudioSelector } from './AudioSelector'
 import WaveSurfer from 'wavesurfer.js'
 import { useSeekContext } from '../_hooks/seek'
-import { scrollToQuarter } from '../_hooks/seek/tool'
 
-export const AudioGraph = () => {
+export const AudioGraph = ({
+  graphLeftPaddingPercentage,
+}: {
+  /** percentage of width as [0..1] (0 = 0%, 1 = 100%) */
+  graphLeftPaddingPercentage: number
+}) => {
   const [url, setURL] = useState<string | undefined>()
   const [filename, setName] = useState('')
   const onAudioFileSelected = (file: File) => {
@@ -22,11 +26,27 @@ export const AudioGraph = () => {
     init(ws.getDuration())
   }
 
-  const { duration, currentTime, init, seek: scroll } = useSeekContext()
+  const {
+    duration,
+    number,
+    seeking,
+    currentTime,
+    init,
+    seek: seekState,
+  } = useSeekContext(1)
+  const scroll = (currentTime: number) => {
+    if (seeking !== number) {
+      return
+    }
+    graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
+    seekState(currentTime)
+  }
   const graphContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    scrollToQuarter(graphContainerRef, currentTime)
-  }, [currentTime])
+    graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
+    wavesurfer?.seekTo(currentTime / duration)
+    wavesurfer?.pause()
+  }, [currentTime, duration, wavesurfer])
 
   const [isPlaying, setIsPlaying] = useState(false)
   const onPlayPause = () => {
@@ -41,19 +61,54 @@ export const AudioGraph = () => {
       </div>
       {url && (
         <div
-          className={clsx('overflow-x-scroll', 'scrollbar-hidden ')}
+          className={clsx('flex', 'overflow-x-scroll', 'scrollbar-hidden')}
           ref={graphContainerRef}
+          onWheel={(e) => {
+            const seekTime = e.currentTarget.scrollLeft / 100
+            wavesurfer?.pause()
+            seekState(seekTime)
+          }}
+          onScroll={(e) => {
+            if (seeking !== number) {
+              return
+            }
+            const seekTime = e.currentTarget.scrollLeft / 100
+            seekState(seekTime)
+            if (!isPlaying) {
+              wavesurfer?.seekTo(seekTime / duration)
+            }
+          }}
         >
-          <div style={{ width: duration * 100 }}>
-            <WavesurferPlayer
-              url={url}
-              onReady={onReady}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onAudioprocess={(_, currentTime) => scroll(currentTime)}
-              onSeeking={(_, currentTime) => scroll(currentTime)}
-            />
-          </div>
+          <div
+            className={clsx('h-full')}
+            style={{
+              minWidth:
+                (graphContainerRef.current?.clientWidth ?? 0) *
+                graphLeftPaddingPercentage,
+            }}
+            onClick={() => wavesurfer?.seekTo(0)}
+          />
+          <WavesurferPlayer
+            width={duration * 100}
+            url={url}
+            onReady={onReady}
+            onPlay={() => {
+              setIsPlaying(true)
+              seekState(currentTime)
+            }}
+            onPause={() => setIsPlaying(false)}
+            onAudioprocess={(_, currentTime) => scroll(currentTime)}
+            onSeeking={(_, currentTime) => scroll(currentTime)}
+          />
+          <div
+            className={clsx('h-full')}
+            style={{
+              minWidth:
+                (graphContainerRef.current?.clientWidth ?? 0) *
+                (1 - graphLeftPaddingPercentage),
+            }}
+            onClick={() => wavesurfer?.seekTo(duration)}
+          />
         </div>
       )}
       {url && (

@@ -4,7 +4,12 @@ import { createContext, ReactNode, useReducer } from 'react'
 import { SeekDispatchAction, SeekState, seekStateReducer } from './reducer'
 
 export const defaultSeekState = (): SeekState => {
-  return { duration: 0, currentTime: 0 }
+  return {
+    duration: 0,
+    seeking: 1,
+    1: { currentTime: 0 },
+    2: { currentTime: 0 },
+  }
 }
 
 export const SeekContext = createContext<{
