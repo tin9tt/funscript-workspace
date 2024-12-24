@@ -1,10 +1,12 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import WavesurferPlayer from '@wavesurfer/react'
 import clsx from 'clsx'
 import { AudioSelector } from './AudioSelector'
 import WaveSurfer from 'wavesurfer.js'
+import { useSeekContext } from '../_hooks/seek'
+import { scrollToQuarter } from '../_hooks/seek/tool'
 
 export const AudioGraph = () => {
   const [url, setURL] = useState<string | undefined>()
@@ -15,20 +17,16 @@ export const AudioGraph = () => {
   }
 
   const [wavesurfer, setWavesurfer] = useState<WaveSurfer | undefined>()
-  const [duration, setDuration] = useState(0)
   const onReady = (ws: WaveSurfer) => {
     setWavesurfer(ws)
-    setDuration(ws.getDuration())
+    init(ws.getDuration())
   }
 
-  const waveContainerRef = useRef<HTMLDivElement>(null)
-  const scrollToQuarter = (currentTime: number) => {
-    const containerWidth = waveContainerRef.current?.clientWidth ?? 0
-    const offset = -containerWidth / 4
-    waveContainerRef.current?.scroll({
-      left: offset + currentTime * 100,
-    })
-  }
+  const { duration, currentTime, init, seek: scroll } = useSeekContext()
+  const graphContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    scrollToQuarter(graphContainerRef, currentTime)
+  }, [currentTime])
 
   const [isPlaying, setIsPlaying] = useState(false)
   const onPlayPause = () => {
@@ -38,13 +36,13 @@ export const AudioGraph = () => {
   return (
     <div className={clsx('grid', 'gap-2')}>
       <div className={clsx('flex', 'justify-between')}>
-        {filename && `${filename} (${duration} ms)`}
+        {filename && `${filename} (${duration} s)`}
         <AudioSelector set={onAudioFileSelected} />
       </div>
       {url && (
         <div
           className={clsx('overflow-x-scroll', 'scrollbar-hidden ')}
-          ref={waveContainerRef}
+          ref={graphContainerRef}
         >
           <div style={{ width: duration * 100 }}>
             <WavesurferPlayer
@@ -52,8 +50,8 @@ export const AudioGraph = () => {
               onReady={onReady}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              onAudioprocess={(_, currentTime) => scrollToQuarter(currentTime)}
-              onSeeking={(_, currentTime) => scrollToQuarter(currentTime)}
+              onAudioprocess={(_, currentTime) => scroll(currentTime)}
+              onSeeking={(_, currentTime) => scroll(currentTime)}
             />
           </div>
         </div>

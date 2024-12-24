@@ -1,35 +1,55 @@
+'use client'
+
 import { FunscriptAction } from '@/lib/funscript'
 import clsx from 'clsx'
+import { useSeekContext } from '../_hooks/seek'
+import { useEffect, useRef } from 'react'
+import { scrollToQuarter } from '../_hooks/seek/tool'
 
 export const ScriptGraph = ({ actions }: { actions: FunscriptAction[] }) => {
+  const { duration, currentTime } = useSeekContext()
+  const graphContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    scrollToQuarter(graphContainerRef, currentTime)
+  }, [currentTime])
+
   return (
     <div
       className={clsx(
-        ['relative', 'flex'],
-        ['w-full', 'max-w-full', 'px-4'],
-        ['overflow-x-scroll', 'overflow-y-visible', 'scrollbar-hidden'],
-        ['py-1', '-my-1'],
+        ['w-full', 'max-w-full'],
+        ['overflow-x-scroll', 'scrollbar-hidden'],
+        ['overflow-y-visible', 'py-1', '-my-1'],
       )}
+      ref={graphContainerRef}
     >
-      {actions.map((action, i) => {
-        const next = actions[i + 1]
-        return (
-          <div
-            key={`point-${i}`}
-            className={clsx('flex', 'border-y-[1px]', 'border-primary-content')}
-          >
-            <GraphColumnPoint pos={action.pos} heightRate={3.2} />
-            {next !== undefined && (
-              <GraphColumnLine
-                action={action}
-                next={next}
-                heightRate={3.2}
-                widthRate={0.1}
-              />
-            )}
-          </div>
-        )
-      })}
+      <div
+        className={clsx('relative', 'flex')}
+        style={{ width: duration * 100 }}
+      >
+        {actions.map((action, i) => {
+          const next = actions[i + 1]
+          return (
+            <div
+              key={`point-${i}`}
+              className={clsx(
+                'flex',
+                'border-y-[1px]',
+                'border-primary-content',
+              )}
+            >
+              <GraphColumnPoint pos={action.pos} heightRate={3.2} />
+              {next !== undefined && (
+                <GraphColumnLine
+                  action={action}
+                  next={next}
+                  heightRate={3.2}
+                  widthRate={0.1}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
