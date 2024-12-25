@@ -6,7 +6,7 @@ import { useSeekContext } from '../_hooks/seek'
 export const VideoViewer = ({ file }: { file?: File }) => {
   const [src, setSrc] = useState<string>()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const { currentTime, init, seek: seekState } = useSeekContext(1)
+  const { seeking, currentTime, init, seek: seekState } = useSeekContext(1)
 
   useEffect(() => {
     if (!file) {
@@ -20,8 +20,11 @@ export const VideoViewer = ({ file }: { file?: File }) => {
   }, [file])
 
   useEffect(() => {
-    videoRef.current?.pause()
+    if (seeking === 2) {
+      videoRef.current?.pause()
+    }
     videoRef.current!.currentTime = currentTime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime])
 
   return (

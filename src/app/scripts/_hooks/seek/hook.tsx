@@ -1,7 +1,7 @@
 import { useContext } from 'react'
 import { SeekContext } from './context'
 
-export const useSeekContext = (from: 1 | 2) => {
+export const useSeekContext = (from: 0 | 1 | 2) => {
   const { state, dispatch } = useContext(SeekContext)
 
   const init = (duration: number) => {
@@ -9,7 +9,17 @@ export const useSeekContext = (from: 1 | 2) => {
   }
 
   const seek = (currentTime: number) => {
+    if (currentTime < 0) {
+      currentTime = 0
+    }
+    if (currentTime > state.duration) {
+      currentTime = state.duration
+    }
     switch (from) {
+      case 0:
+        dispatch({ kind: 'seek.from0', payload: { currentTime } })
+        dispatch({ kind: 'seek.from1', payload: { currentTime } })
+        break
       case 1:
         dispatch({ kind: 'seek.from1', payload: { currentTime } })
         break
@@ -23,7 +33,7 @@ export const useSeekContext = (from: 1 | 2) => {
     duration: state.duration,
     number: from,
     seeking: state.seeking,
-    currentTime: state[from].currentTime,
+    currentTime: from === 0 ? state[2].currentTime : state[from].currentTime,
     init,
     seek,
   }

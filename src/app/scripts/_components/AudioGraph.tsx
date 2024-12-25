@@ -57,7 +57,10 @@ export const AudioGraph = ({
   useEffect(() => {
     graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
     wavesurfer?.seekTo(currentTime / duration)
-    wavesurfer?.pause()
+    if (seeking === 2) {
+      wavesurfer?.pause()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, duration, wavesurfer])
 
   const [isPlaying, setIsPlaying] = useState(false)
