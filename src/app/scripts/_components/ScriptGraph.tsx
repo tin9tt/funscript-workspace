@@ -29,8 +29,7 @@ export const ScriptGraph = ({
     <div
       className={clsx(
         ['w-full', 'max-w-full', 'flex'],
-        ['overflow-x-scroll', 'scrollbar-hidden'],
-        ['overflow-y-visible', 'py-1', '-my-1'],
+        ['overflow-x-scroll', 'overflow-y-clip', 'scrollbar-hidden'],
       )}
       ref={graphContainerRef}
       onWheel={(e) => {
@@ -57,20 +56,26 @@ export const ScriptGraph = ({
         onClick={() => seekState(0)}
       />
       <div
-        className={clsx('relative', 'flex')}
+        className={clsx(
+          ['relative', 'flex'],
+          ['border-y-[1px]', 'border-primary-content'],
+        )}
         style={{ width: duration * 100, minWidth: duration * 100 }}
       >
+        {actions.length !== 0 && (
+          <div className={clsx('invisible')}>
+            <GraphColumnLine
+              action={{ pos: 0, at: 0 }}
+              next={{ pos: 0, at: actions[0].at }}
+              heightRate={3.2}
+              widthRate={0.1}
+            />
+          </div>
+        )}
         {actions.map((action, i) => {
           const next = actions[i + 1]
           return (
-            <div
-              key={`point-${i}`}
-              className={clsx(
-                'flex',
-                'border-y-[1px]',
-                'border-primary-content',
-              )}
-            >
+            <div key={`point-${i}`} className={clsx('flex')}>
               <GraphColumnPoint pos={action.pos} heightRate={3.2} />
               {next !== undefined && (
                 <GraphColumnLine
