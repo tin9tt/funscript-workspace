@@ -3,12 +3,13 @@
 import { useContext } from 'react'
 import { FileContext } from './context'
 import { isFunscript } from '@/lib/funscript'
+import { isAudio, isVideo } from './reducer'
 
 export const useFileContext = () => {
   const { state, dispatch } = useContext(FileContext)
 
   const load = (file: File, index: number) => {
-    if (file.type.startsWith('audio')) {
+    if (isAudio(file) || isVideo(file)) {
       dispatch({ kind: 'load track', payload: { index, file } })
     }
     if (file.name.endsWith('.funscript') || file.type === 'application/json') {
