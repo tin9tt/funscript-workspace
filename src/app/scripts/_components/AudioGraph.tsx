@@ -71,9 +71,11 @@ export const AudioGraph = ({
           className={clsx('flex', 'overflow-x-scroll', 'scrollbar-hidden')}
           ref={graphContainerRef}
           onWheel={(e) => {
-            const seekTime = e.currentTarget.scrollLeft / 100
-            wavesurfer?.pause()
-            seekState(seekTime)
+            if (e.deltaX !== 0) {
+              const seekTime = e.currentTarget.scrollLeft / 100
+              wavesurfer?.pause()
+              seekState(seekTime)
+            }
           }}
           onScroll={(e) => {
             if (seeking !== number) {

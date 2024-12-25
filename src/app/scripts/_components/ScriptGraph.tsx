@@ -34,8 +34,10 @@ export const ScriptGraph = ({
       )}
       ref={graphContainerRef}
       onWheel={(e) => {
-        const seekTime = e.currentTarget.scrollLeft / 100
-        seekState(seekTime)
+        if (e.deltaX !== 0) {
+          const seekTime = e.currentTarget.scrollLeft / 100
+          seekState(seekTime)
+        }
       }}
       onScroll={(e) => {
         if (seeking !== number) {
