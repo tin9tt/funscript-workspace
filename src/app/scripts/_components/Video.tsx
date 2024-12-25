@@ -14,6 +14,8 @@ export const VideoViewer = ({ file }: { file?: File }) => {
     }
     setSrc(URL.createObjectURL(file))
     videoRef.current?.load()
+    videoRef.current!.currentTime = 0
+    seekState(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 

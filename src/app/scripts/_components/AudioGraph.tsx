@@ -22,11 +22,13 @@ export const AudioGraph = ({
     setURL(URL.createObjectURL(file))
     setName(file.name)
     setLoading(true)
+    wavesurfer?.seekTo(0)
   }
   useLayoutEffect(() => {
     if (file && file.type.split('/')[0] === 'audio') {
       onAudioFileSelected(file)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 
   const [wavesurfer, setWavesurfer] = useState<WaveSurfer | undefined>()
