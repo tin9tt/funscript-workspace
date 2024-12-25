@@ -13,6 +13,7 @@ export const VideoViewer = ({ file }: { file?: File }) => {
       return
     }
     setSrc(URL.createObjectURL(file))
+    videoRef.current?.focus()
     videoRef.current?.load()
     videoRef.current!.currentTime = 0
     seekState(0)

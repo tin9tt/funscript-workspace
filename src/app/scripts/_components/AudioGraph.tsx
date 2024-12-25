@@ -131,7 +131,9 @@ export const AudioGraph = ({
       </div>
       {url && !loading && (
         <div className={clsx('flex', 'justify-start', 'gap-4')}>
-          <button onClick={onPlayPause}>{isPlaying ? 'Pause' : 'Play'}</button>
+          <button onClick={onPlayPause} autoFocus>
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
           {`${roundTime(wavesurfer?.getCurrentTime() ?? 0)} s`}
         </div>
       )}
