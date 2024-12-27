@@ -41,32 +41,33 @@ export const AudioGraph = ({
   const {
     duration,
     number,
+    isPlaying,
     seeking,
     currentTime,
     init,
+    playPause,
     seek: seekState,
   } = useSeekContext(1)
+  useEffect(() => {
+    wavesurfer?.playPause()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying])
   const scroll = (currentTime: number) => {
-    if (seeking !== number) {
+    graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
+    if (seeking === 2) {
       return
     }
-    graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
     seekState(currentTime)
   }
   const graphContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
     wavesurfer?.seekTo(currentTime / duration)
-    if (seeking === 2) {
-      wavesurfer?.pause()
+    if (seeking === 2 && isPlaying) {
+      playPause()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, duration, wavesurfer])
-
-  const [isPlaying, setIsPlaying] = useState(false)
-  const onPlayPause = () => {
-    wavesurfer?.playPause()
-  }
 
   return (
     <div className={clsx('grid', 'gap-2')}>
@@ -83,7 +84,9 @@ export const AudioGraph = ({
         onWheel={(e) => {
           if (e.deltaX !== 0) {
             const seekTime = e.currentTarget.scrollLeft / 100
-            wavesurfer?.pause()
+            if (isPlaying) {
+              playPause()
+            }
             seekState(seekTime)
           }
         }}
@@ -111,11 +114,13 @@ export const AudioGraph = ({
           width={duration * 100}
           url={url}
           onReady={onReady}
-          onPlay={() => {
-            setIsPlaying(true)
+          onClick={async () => {
+            const sleep = (ms: number) =>
+              new Promise((res) => setTimeout(res, ms))
+            await sleep(50)
             seekState(currentTime)
+            scroll(currentTime)
           }}
-          onPause={() => setIsPlaying(false)}
           onAudioprocess={(_, currentTime) => scroll(currentTime)}
           onSeeking={(_, currentTime) => scroll(currentTime)}
         />
@@ -131,7 +136,7 @@ export const AudioGraph = ({
       </div>
       {url && !loading && (
         <div className={clsx('flex', 'justify-start', 'gap-4')}>
-          <button onClick={onPlayPause} autoFocus>
+          <button onClick={playPause} autoFocus>
             {isPlaying ? 'Pause' : 'Play'}
           </button>
           {`${roundTime(wavesurfer?.getCurrentTime() ?? 0)} s`}

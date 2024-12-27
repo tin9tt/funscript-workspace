@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, ReactNode, useReducer } from 'react'
+import { createContext, KeyboardEvent, ReactNode, useReducer } from 'react'
 import { SeekDispatchAction, SeekState, seekStateReducer } from './reducer'
 import clsx from 'clsx'
 import { useSeekContext } from './hook'
@@ -8,6 +8,7 @@ import { useSeekContext } from './hook'
 export const defaultSeekState = (): SeekState => {
   return {
     duration: 0,
+    isPlaying: false,
     seeking: 1,
     1: { currentTime: 0 },
     2: { currentTime: 0 },
