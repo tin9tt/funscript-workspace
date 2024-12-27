@@ -43,35 +43,28 @@ export const KeyDetect = ({
 }) => {
   const { currentTime, seek } = useSeekContext(0)
 
-  const seekRight = () => {
-    seek(currentTime + 2)
-  }
-
-  const seekLeft = () => {
-    seek(currentTime - 2)
-  }
+  const detectRightSeek = keyDetector(['ArrowRight', 'l', 'L'], () =>
+    seek(currentTime + 2),
+  )
+  const detectLeftSeek = keyDetector(['ArrowLeft', 'j', 'J'], () =>
+    seek(currentTime - 2),
+  )
 
   return (
     <div
       className={className}
       onKeyDown={(e) => {
-        switch (e.key) {
-          case 'ArrowRight':
-          case 'l':
-          case 'L':
-            seekRight()
-            break
-          case 'ArrowLeft':
-          case 'j':
-          case 'J':
-            seekLeft()
-            break
-          default:
-            break
-        }
+        detectRightSeek(e)
+        detectLeftSeek(e)
       }}
     >
       {children}
     </div>
   )
+}
+
+const keyDetector = (keys: string[], fn: () => void) => (e: KeyboardEvent) => {
+  if (keys.includes(e.key)) {
+    fn()
+  }
 }
