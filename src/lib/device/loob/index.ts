@@ -31,6 +31,7 @@ export class Loob implements LoobI {
   private device: BluetoothDevice | null = null
   private service: BluetoothRemoteGATTService | null = null
   private characteristic: BluetoothRemoteGATTCharacteristic | null = null
+  private linearInvert: boolean = false
 
   private constructor() {}
 
@@ -94,7 +95,9 @@ export class Loob implements LoobI {
       duration = Math.max(Loob.minApplyDuration(posDiff), duration)
     }
 
-    const posValue = Math.min(Math.max(pos * 10, 1), 1000)
+    // linearInvertがtrueの場合、位置を反転
+    const finalPos = this.linearInvert ? 100 - pos : pos
+    const posValue = Math.min(Math.max(finalPos * 10, 1), 1000)
     const timeValue = Math.min(duration, 65535)
 
     const data = new Uint8Array([
@@ -133,6 +136,12 @@ export class Loob implements LoobI {
   async load(funscript: Funscript) {
     console.log('Load funscript:', funscript.metadata?.title)
     this.funscript = sanitizeFunscript(funscript)
+
+    // Funscript.invertedプロパティがある場合は、linearInvertを設定
+    if (funscript.inverted !== undefined) {
+      this.linearInvert = funscript.inverted
+      console.log('Set linear invert from funscript:', funscript.inverted)
+    }
   }
 
   /**
