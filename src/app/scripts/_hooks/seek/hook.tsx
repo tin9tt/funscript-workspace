@@ -1,6 +1,11 @@
 import { useContext } from 'react'
 import { SeekContext } from './context'
 
+/**
+ * @param from 0 | 1 | 2
+ * - 0 bidirectional with 1 and 2 (for background e.g. keyboard event)
+ * - 1 | 2 unidirectional with 2 | 1 (for UI e.g. slider. Because two synced scroll events are affect both and it causes infinite loop)
+ */
 export const useSeekContext = (from: 0 | 1 | 2) => {
   const { state, dispatch } = useContext(SeekContext)
 
@@ -35,6 +40,9 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
     number: from,
     isPlaying: state.isPlaying,
     seeking: state.seeking,
+    /**
+     * seconds
+     */
     currentTime:
       from === 0
         ? state.seeking === 2

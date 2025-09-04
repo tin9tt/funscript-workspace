@@ -49,6 +49,7 @@ export const FileDrop = ({
           const item = e.dataTransfer.items[i]
           const file = item.getAsFile()
           if (file) {
+            console.log(`file dropped: ${file.name} (${file.type})`)
             load(file, 0)
           }
         }

@@ -57,10 +57,27 @@ export const ScriptGraph = ({
       />
       <div
         className={clsx(
+          ['h-full', 'w-0', 'sticky'],
+          ['outline', 'outline-primary-content', 'outline-[0.2px]'],
+        )}
+        style={{
+          left:
+            (graphContainerRef.current?.clientWidth ?? 0) *
+            graphLeftPaddingPercentage,
+        }}
+      />
+      <div
+        className={clsx(
           ['relative', 'flex'],
           ['border-y-[1px]', 'border-primary-content'],
         )}
         style={{ width: duration * 100, minWidth: duration * 100 }}
+        onClick={() => {
+          // TODO: seek
+        }}
+        onDrag={() => {
+          // TODO: seeek
+        }}
       >
         {actions.length !== 0 && (
           <div className={clsx('invisible')}>

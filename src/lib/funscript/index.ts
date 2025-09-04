@@ -21,7 +21,13 @@ export interface FunscriptMeta {
 }
 
 export interface FunscriptAction {
+  /**
+   * timestamp in milliseconds
+   */
   at: number
+  /**
+   * position in percentage (0-100)
+   */
   pos: number
 }
 
@@ -97,3 +103,18 @@ const isFunscriptAction = (v: unknown): v is FunscriptAction => {
   if (typeof pos !== 'number') return false
   return true
 }
+
+export const sanitizeFunscript = (v: Funscript): Funscript => ({
+  ...v,
+  actions: sortAndClampFunscriptActions(v.actions),
+})
+
+const sortAndClampFunscriptActions = (
+  actions: FunscriptAction[],
+): FunscriptAction[] =>
+  actions
+    .sort((a, b) => a.at - b.at)
+    .map((a) => ({
+      ...a,
+      pos: Math.min(100, Math.max(0, a.pos)),
+    }))
