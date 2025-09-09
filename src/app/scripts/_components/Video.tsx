@@ -29,7 +29,7 @@ export const VideoViewer = ({ file }: { file?: File }) => {
   }, [file])
 
   useEffect(() => {
-    if (isPlaying) {
+    if (!isPlaying) {
       videoRef.current?.pause()
     } else {
       videoRef.current?.play()
@@ -51,6 +51,8 @@ export const VideoViewer = ({ file }: { file?: File }) => {
       onDurationChange={(e) => init(e.currentTarget.duration)}
       onSeeking={(e) => seekState(e.currentTarget.currentTime)}
       onTimeUpdate={(e) => seekState(e.currentTarget.currentTime)}
+      onPlay={playPause}
+      onPause={playPause}
     >
       <source src={src} />
     </video>
