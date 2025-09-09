@@ -217,37 +217,21 @@ export class Loob implements LoobI {
 
     const playLoop = async () => {
       while (this.isPlaying && this.funscriptActionIndex < actions.length) {
-        // C#コードの TryQueue() と RunQueue() ロジックを参考に実装
-        // 現在時刻を計算
         const currentTime = Date.now() - playbackStartTime + videoCurrentTime
-
-        // 次に実行すべきアクションを確認
-        if (this.funscriptActionIndex < actions.length) {
-          const nextAction = actions[this.funscriptActionIndex]
-
-          // アクション実行時刻に到達したかチェック
-          if (currentTime >= nextAction.at) {
-            // 次のアクションとの時間差を計算
-            let duration = 500 // デフォルト値
-            if (this.funscriptActionIndex + 1 < actions.length) {
-              const afterNextAction = actions[this.funscriptActionIndex + 1]
-              duration = afterNextAction.at - nextAction.at
-            }
-
-            // 最小持続時間制約を適用
-            if (this.funscriptActionIndex > 0) {
-              const prevAction = actions[this.funscriptActionIndex - 1]
-              const posDiff = Math.abs(nextAction.pos - prevAction.pos)
-              duration = Math.max(Loob.minApplyDuration(posDiff), duration)
-            }
-
-            // デバイスにコマンドを送信（C#のようにsleepなし）
-            await this.sendLinearCommand(duration, nextAction.pos)
-            this.funscriptActionIndex++
-          }
+        const currentAction = actions[this.funscriptActionIndex]
+        let duration = 500
+        if (this.funscriptActionIndex > 0) {
+          const prevAction = actions[this.funscriptActionIndex - 1]
+          duration = currentAction.at - prevAction.at
+          const posDiff = Math.abs(currentAction.pos - prevAction.pos)
+          duration = Math.max(Loob.minApplyDuration(posDiff), duration)
         }
-
-        // C#コードではINTERVAL（約16ms）で処理
+        // アクションの開始時刻に到達したらコマンド送信し、インデックスを進める
+        if (currentTime >= currentAction.at - duration) {
+          await this.sendLinearCommand(duration, currentAction.pos)
+          this.funscriptActionIndex++
+          continue
+        }
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
     }
