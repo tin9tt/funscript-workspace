@@ -77,7 +77,7 @@ export class Loob implements LoobI {
       console.log('Command sent:', data)
       await this.characteristic.writeValue(data)
     } catch (error) {
-      throw `Failed to send command: ${error}`
+      console.error(`Failed to send command: ${error}`)
     }
   }
 
