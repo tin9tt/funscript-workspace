@@ -47,11 +47,18 @@ export const AudioGraph = ({
     init,
     playPause,
     seek: seekState,
+    syncPlayStateOnFinish,
   } = useSeekContext(1)
+
+  const [isFinished, setIsFinished] = useState(false)
+
   useEffect(() => {
-    wavesurfer?.playPause()
+    // 再生終了フラグがセットされている場合は自動再生を防ぐ
+    if (!isFinished) {
+      wavesurfer?.playPause()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying])
+  }, [isPlaying, isFinished])
   const scroll = (currentTime: number) => {
     graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
     if (seeking === 2) {
@@ -123,6 +130,15 @@ export const AudioGraph = ({
           }}
           onAudioprocess={(_, currentTime) => scroll(currentTime)}
           onSeeking={(_, currentTime) => scroll(currentTime)}
+          onFinish={() => {
+            // 再生終了フラグを設定
+            setIsFinished(true)
+            // wavesurferを停止し、位置をリセット
+            wavesurfer?.pause()
+            wavesurfer?.seekTo(0)
+            seekState(0)
+            syncPlayStateOnFinish()
+          }}
         />
         <div
           className={clsx('h-full')}
@@ -136,7 +152,13 @@ export const AudioGraph = ({
       </div>
       {url && !loading && (
         <div className={clsx('flex', 'justify-start', 'gap-4')}>
-          <button onClick={playPause} autoFocus>
+          <button
+            onClick={() => {
+              setIsFinished(false)
+              playPause()
+            }}
+            autoFocus
+          >
             {isPlaying ? 'Pause' : 'Play'}
           </button>
           {`${roundTime(wavesurfer?.getCurrentTime() ?? 0)} s`}

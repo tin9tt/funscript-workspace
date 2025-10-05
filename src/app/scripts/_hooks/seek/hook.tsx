@@ -35,6 +35,11 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
     }
   }
 
+  const syncPlayStateOnFinish = () => {
+    // make isPlaying flag `false`
+    if (state.isPlaying) playPause()
+  }
+
   return {
     duration: state.duration,
     number: from,
@@ -52,5 +57,6 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
     init,
     playPause,
     seek,
+    syncPlayStateOnFinish,
   }
 }
