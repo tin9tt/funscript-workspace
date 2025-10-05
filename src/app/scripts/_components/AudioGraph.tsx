@@ -78,7 +78,7 @@ export const AudioGraph = ({
       </div>
       {loading && <>{`Loading...`}</>}
       <div
-        className={clsx('flex', 'overflow-x-scroll', 'scrollbar-hidden')}
+        className={clsx('flex', 'overflow-x-scroll', 'scrollbar-primary')}
         hidden={loading}
         ref={graphContainerRef}
         onWheel={(e) => {

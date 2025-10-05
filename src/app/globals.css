@@ -6,6 +6,11 @@
   .bg-lattice-primary-content-8 {
     @apply bg-lattice-primary-content-8-light dark:bg-lattice-primary-content-8-dark;
   }
+
+  .scrollbar-primary {
+    scrollbar-color: #ffa757 transparent;
+    cursor: pointer;
+  }
 }
 
 @layer utilities {
