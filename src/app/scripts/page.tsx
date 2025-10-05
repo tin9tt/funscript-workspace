@@ -13,27 +13,80 @@ import { OptionsPane, OptionsState } from './_components/OptionsPane'
 import { useScriptInvert } from './_hooks/fileWithLinearOptions/invert/hook'
 import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
 
-const useFile = (option: OptionsState) => {
+const usePersistentOption = () => {
+  const STORAGE_KEY = 'funscript-options'
+
+  // localStorageから初期値を読み込み
+  const getInitialOptions = (): OptionsState => {
+    if (typeof window === 'undefined') {
+      // SSR環境での初期値
+      return {
+        inverted: false,
+        range: {
+          offset: 0,
+          limit: 100,
+        },
+      }
+    }
+
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        // 基本的なバリデーション
+        if (
+          typeof parsed.inverted === 'boolean' &&
+          typeof parsed.range?.offset === 'number' &&
+          typeof parsed.range?.limit === 'number'
+        ) {
+          return parsed
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load options from localStorage:', error)
+    }
+
+    // デフォルト値
+    return {
+      inverted: false,
+      range: {
+        offset: 0,
+        limit: 100,
+      },
+    }
+  }
+
+  const [options, setOption] = useState<OptionsState>(getInitialOptions)
+
+  const saveOption = (newOption: OptionsState) => {
+    setOption(newOption)
+
+    // localStorageに保存
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newOption))
+      } catch (error) {
+        console.warn('Failed to save options to localStorage:', error)
+      }
+    }
+  }
+
+  return { options, saveOption }
+}
+
+const useFile = () => {
   const { tracks } = useFileContext()
-  const invertedTracks = useScriptInvert({ tracks }, option.inverted)
-  const finalTracks = useScriptRange(invertedTracks, option.range)
-  return finalTracks
+  const { options, saveOption } = usePersistentOption()
+  const invertedTracks = useScriptInvert({ tracks }, options.inverted)
+  const finalTracks = useScriptRange(invertedTracks, options.range)
+  return { ...finalTracks, option: options, saveOption }
 }
 
 export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
   const { isPlaying, currentTime, playPause } = useSeekContext(0)
 
-  // Script options state
-  const [options, setOptions] = useState<OptionsState>({
-    inverted: false,
-    range: {
-      offset: 0,
-      limit: 100,
-    },
-  })
-
-  const { tracks } = useFile(options)
+  const { tracks, option, saveOption } = useFile()
 
   // OptionsPane expansion state
   const [isPaneExpanded, setIsPaneExpanded] = useState(false)
@@ -120,8 +173,8 @@ export default function Scripts() {
         {/* Options pane overlay */}
         <div className={clsx('absolute', 'top-0', 'right-0', 'z-10')}>
           <OptionsPane
-            options={options}
-            onOptionsChange={setOptions}
+            options={option}
+            onOptionsChange={saveOption}
             isPlaying={isPlaying}
             onPaneOpen={handlePaneOpen}
             isExpanded={isPaneExpanded}
