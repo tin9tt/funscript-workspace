@@ -16,19 +16,18 @@ import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
 const usePersistentOption = () => {
   const STORAGE_KEY = 'funscript-options'
 
-  // localStorageから初期値を読み込み
-  const getInitialOptions = (): OptionsState => {
-    if (typeof window === 'undefined') {
-      // SSR環境での初期値
-      return {
-        inverted: false,
-        range: {
-          offset: 0,
-          limit: 100,
-        },
-      }
-    }
+  const defaultOptions: OptionsState = {
+    inverted: false,
+    range: {
+      offset: 0,
+      limit: 100,
+    },
+  }
 
+  const [options, setOption] = useState<OptionsState>(defaultOptions)
+
+  // クライアントサイドでlocalStorageから読み込み
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
@@ -39,35 +38,22 @@ const usePersistentOption = () => {
           typeof parsed.range?.offset === 'number' &&
           typeof parsed.range?.limit === 'number'
         ) {
-          return parsed
+          setOption(parsed)
         }
       }
     } catch (error) {
       console.warn('Failed to load options from localStorage:', error)
     }
-
-    // デフォルト値
-    return {
-      inverted: false,
-      range: {
-        offset: 0,
-        limit: 100,
-      },
-    }
-  }
-
-  const [options, setOption] = useState<OptionsState>(getInitialOptions)
+  }, [])
 
   const saveOption = (newOption: OptionsState) => {
     setOption(newOption)
 
     // localStorageに保存
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newOption))
-      } catch (error) {
-        console.warn('Failed to save options to localStorage:', error)
-      }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newOption))
+    } catch (error) {
+      console.warn('Failed to save options to localStorage:', error)
     }
   }
 
