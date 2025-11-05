@@ -12,6 +12,7 @@ import { useSeekContext } from './_hooks/seek'
 import { OptionsPane, OptionsState } from './_components/OptionsPane'
 import { useScriptInvert } from './_hooks/fileWithLinearOptions/invert/hook'
 import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
+import { HorizontalRangeSlider, ToggleSwitch } from '../_components/common'
 
 const usePersistentOption = () => {
   const STORAGE_KEY = 'funscript-options'
@@ -70,12 +71,27 @@ const useFile = () => {
 
 export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
-  const { isPlaying, currentTime, playPause } = useSeekContext(0)
+  const { isPlaying, currentTime, duration, playPause, seek } =
+    useSeekContext(0)
 
   const { tracks, option, saveOption } = useFile()
 
   // OptionsPane expansion state
   const [isPaneExpanded, setIsPaneExpanded] = useState(false)
+
+  // Loop state
+  const [isLoopEnabled, setIsLoopEnabled] = useState(false)
+
+  // Loop range state
+  const [loopRangeOffset, setLoopRangeOffset] = useState(0)
+  const [loopRangeLimit, setLoopRangeLimit] = useState(duration)
+
+  // Update loop range limit when duration changes
+  useEffect(() => {
+    if (duration) {
+      setLoopRangeLimit(duration)
+    }
+  }, [duration])
 
   // Close OptionsPane when playback starts
   useEffect(() => {
@@ -89,6 +105,38 @@ export default function Scripts() {
       playPause() // Stop playback when pane is opened during playback
     }
   }
+
+  // Handle range slider changes
+  const handleLoopRangeChange = (offset: number, limit: number) => {
+    setLoopRangeOffset(offset)
+    setLoopRangeLimit(limit)
+  }
+
+  useEffect(() => {
+    // Loop functionality: if currentTime goes outside loop range, pause and seek back
+    if (!isLoopEnabled || !duration) return
+
+    if (
+      currentTime < loopRangeOffset ||
+      currentTime > loopRangeLimit ||
+      currentTime === duration
+    ) {
+      // Seek to loop start
+      seek(currentTime < loopRangeOffset ? loopRangeOffset : 0)
+      // NOTE: When currentTime goes over loopRangeLimit, we cannot seek directly to loopRangeOffset
+      //   because useSeekContext cannot detect the seek control properly and sync with video/audio fails.
+      //   So we first seek to 0 to make the control clear, then seek to loopRangeOffset in the next call of this effect.
+    }
+  }, [
+    currentTime,
+    isLoopEnabled,
+    loopRangeOffset,
+    loopRangeLimit,
+    duration,
+    isPlaying,
+    playPause,
+    seek,
+  ])
 
   useEffect(() => {
     if (tracks.length === 0) {
@@ -141,6 +189,27 @@ export default function Scripts() {
             <VideoViewer file={tracks[0]?.video} />
           </div>
         )}
+        {/* Range Slider and Loop Toggle */}
+        <div className={clsx('flex', 'flex-col', 'gap-4', 'w-full')}>
+          {/* Horizontal Range Slider */}
+          <HorizontalRangeSlider
+            offsetValue={loopRangeOffset}
+            limitValue={loopRangeLimit}
+            onChange={handleLoopRangeChange}
+            disabled={isPlaying}
+            duration={duration}
+          />
+
+          {/* Loop Toggle */}
+          <div className={clsx('flex', 'justify-start', 'gap-2')}>
+            <span className={clsx('text-sm', 'text-gray-600')}>Loop:</span>
+            <ToggleSwitch
+              checked={isLoopEnabled}
+              onChange={setIsLoopEnabled}
+              disabled={isPlaying}
+            />
+          </div>
+        </div>
       </Card>
       <Card
         className={clsx(
