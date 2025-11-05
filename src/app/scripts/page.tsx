@@ -155,7 +155,7 @@ const useFile = (duration: number) => {
 
 export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
-  const { isPlaying, currentTime, duration, playPause, seek } =
+  const { isPlaying, currentTime, duration, play, pause, seek } =
     useSeekContext(0)
 
   const { tracks, option, saveOption, loopRange, saveLoopRange } =
@@ -174,11 +174,7 @@ export default function Scripts() {
     }
   }, [isPlaying, isPaneExpanded])
 
-  const handlePaneOpen = () => {
-    if (isPlaying) {
-      playPause() // Stop playback when pane is opened during playback
-    }
-  }
+  const handlePaneOpen = () => pause()
 
   // Handle range slider changes
   const handleLoopRangeChange = (offset: number, limit: number) => {
@@ -210,15 +206,15 @@ export default function Scripts() {
     if (!track.script) {
       return
     }
-    const isPlayed = isPlaying
-    if (isPlayed) {
-      playPause()
+    const wasPlayed = isPlaying
+    if (wasPlayed) {
+      pause()
       device.pause()
     }
     device.load(track.script).then(async () => {
       await device.seek(currentTime)
-      if (isPlayed) {
-        playPause()
+      if (wasPlayed) {
+        play()
         device.play(Date.now(), currentTime * 1000)
       }
     })

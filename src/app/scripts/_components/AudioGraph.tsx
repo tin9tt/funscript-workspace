@@ -45,8 +45,9 @@ export const AudioGraph = ({
     seeking,
     currentTime,
     init,
-    playPause,
-    seek: seekState,
+    play,
+    pause,
+    seek,
     syncPlayStateOnFinish,
   } = useSeekContext(1)
 
@@ -64,14 +65,14 @@ export const AudioGraph = ({
     if (seeking === 2) {
       return
     }
-    seekState(currentTime)
+    seek(currentTime)
   }
   const graphContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     graphContainerRef.current?.scrollTo({ left: currentTime * 100 })
     wavesurfer?.seekTo(currentTime / duration)
     if (seeking === 2 && isPlaying) {
-      playPause()
+      pause()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, duration, wavesurfer])
@@ -92,9 +93,9 @@ export const AudioGraph = ({
           if (e.deltaX !== 0) {
             const seekTime = e.currentTarget.scrollLeft / 100
             if (isPlaying) {
-              playPause()
+              pause()
             }
-            seekState(seekTime)
+            seek(seekTime)
           }
         }}
         onScroll={(e) => {
@@ -102,7 +103,7 @@ export const AudioGraph = ({
             return
           }
           const seekTime = e.currentTarget.scrollLeft / 100
-          seekState(seekTime)
+          seek(seekTime)
           if (!isPlaying) {
             wavesurfer?.seekTo(seekTime / duration)
           }
@@ -125,7 +126,7 @@ export const AudioGraph = ({
             const sleep = (ms: number) =>
               new Promise((res) => setTimeout(res, ms))
             await sleep(50)
-            seekState(currentTime)
+            seek(currentTime)
             scroll(currentTime)
           }}
           onAudioprocess={(_, currentTime) => scroll(currentTime)}
@@ -136,7 +137,7 @@ export const AudioGraph = ({
             // wavesurferを停止し、位置をリセット
             wavesurfer?.pause()
             wavesurfer?.seekTo(0)
-            seekState(0)
+            seek(0)
             syncPlayStateOnFinish()
           }}
         />
@@ -155,7 +156,11 @@ export const AudioGraph = ({
           <button
             onClick={() => {
               setIsFinished(false)
-              playPause()
+              if (isPlaying) {
+                pause()
+              } else {
+                play()
+              }
             }}
             autoFocus
           >

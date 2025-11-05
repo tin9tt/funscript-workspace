@@ -6,14 +6,8 @@ import { useSeekContext } from '../_hooks/seek'
 export const VideoViewer = ({ file }: { file?: File }) => {
   const [src, setSrc] = useState<string>()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const {
-    isPlaying,
-    seeking,
-    currentTime,
-    init,
-    playPause,
-    seek: seekState,
-  } = useSeekContext(1)
+  const { isPlaying, seeking, currentTime, init, play, pause, seek } =
+    useSeekContext(1)
 
   useEffect(() => {
     if (!file) {
@@ -23,8 +17,8 @@ export const VideoViewer = ({ file }: { file?: File }) => {
     videoRef.current?.focus()
     videoRef.current?.load()
     videoRef.current!.currentTime = 0
-    if (isPlaying) playPause()
-    seekState(0)
+    if (isPlaying) pause()
+    seek(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
 
@@ -38,7 +32,7 @@ export const VideoViewer = ({ file }: { file?: File }) => {
 
   useEffect(() => {
     if (seeking === 2 && isPlaying) {
-      playPause()
+      pause()
     }
     videoRef.current!.currentTime = currentTime
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,10 +43,10 @@ export const VideoViewer = ({ file }: { file?: File }) => {
       controls
       ref={videoRef}
       onDurationChange={(e) => init(e.currentTarget.duration)}
-      onSeeking={(e) => seekState(e.currentTarget.currentTime)}
-      onTimeUpdate={(e) => seekState(e.currentTarget.currentTime)}
-      onPlay={playPause}
-      onPause={playPause}
+      onSeeking={(e) => seek(e.currentTarget.currentTime)}
+      onTimeUpdate={(e) => seek(e.currentTarget.currentTime)}
+      onPlay={play}
+      onPause={pause}
     >
       <source src={src} />
     </video>

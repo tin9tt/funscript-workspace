@@ -13,7 +13,8 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
     dispatch({ kind: 'init', payload: { duration } })
   }
 
-  const playPause = () => dispatch({ kind: 'playpause' })
+  const play = () => dispatch({ kind: 'play' })
+  const pause = () => dispatch({ kind: 'pause' })
 
   const seek = (currentTime: number) => {
     if (currentTime < 0) {
@@ -22,6 +23,8 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
     if (currentTime > state.duration) {
       currentTime = state.duration
     }
+    const wasPlayed = state.isPlaying
+    if (wasPlayed) pause()
     switch (from) {
       case 0:
         dispatch({ kind: 'seek.from0', payload: { currentTime } })
@@ -33,11 +36,12 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
         dispatch({ kind: 'seek.from2', payload: { currentTime } })
         break
     }
+    if (wasPlayed) play()
   }
 
   const syncPlayStateOnFinish = () => {
     // make isPlaying flag `false`
-    if (state.isPlaying) playPause()
+    pause()
   }
 
   return {
@@ -55,7 +59,8 @@ export const useSeekContext = (from: 0 | 1 | 2) => {
           : state[2].currentTime
         : state[from].currentTime,
     init,
-    playPause,
+    play,
+    pause,
     seek,
     syncPlayStateOnFinish,
   }

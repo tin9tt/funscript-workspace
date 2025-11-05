@@ -8,7 +8,8 @@ export interface SeekState {
 
 export type SeekDispatchAction =
   | { kind: 'init'; payload: { duration: number } }
-  | { kind: 'playpause' }
+  | { kind: 'play' }
+  | { kind: 'pause' }
   | {
       kind: 'seek.from0' | 'seek.from1' | 'seek.from2'
       payload: { currentTime: number }
@@ -21,8 +22,10 @@ export const seekStateReducer = (
   switch (action.kind) {
     case 'init':
       return { ...currState, duration: action.payload.duration }
-    case 'playpause':
-      return { ...currState, isPlaying: !currState.isPlaying, seeking: 0 }
+    case 'play':
+      return { ...currState, isPlaying: true, seeking: 0 }
+    case 'pause':
+      return { ...currState, isPlaying: false, seeking: 0 }
     case 'seek.from0':
       return {
         ...currState,
