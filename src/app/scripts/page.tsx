@@ -13,6 +13,7 @@ import { OptionsPane, OptionsState } from './_components/OptionsPane'
 import { useScriptInvert } from './_hooks/fileWithLinearOptions/invert/hook'
 import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
 import { HorizontalRangeSlider, ToggleSwitch } from '../_components/common'
+import { TrackAudio, TrackVideo } from './_hooks/file/reducer'
 
 const usePersistentOption = () => {
   const STORAGE_KEY = 'funscript-options'
@@ -61,12 +62,95 @@ const usePersistentOption = () => {
   return { options, saveOption }
 }
 
-const useFile = () => {
+const useLoopOption = (fileId: string, duration: number) => {
+  const STORAGE_KEY = 'loop-range-' + fileId
+
+  const defaultLoopRange = {
+    offset: 0,
+    limit: duration,
+  }
+
+  const [loopRange, setLoopRange] = useState<{
+    offset: number
+    limit: number
+  }>(defaultLoopRange)
+
+  // クライアントサイドでlocalStorageから読み込み
+  useEffect(() => {
+    if (!fileId) return
+
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (
+          typeof parsed.offset === 'number' &&
+          (parsed.limit === undefined || typeof parsed.limit === 'number')
+        ) {
+          setLoopRange(parsed)
+          return
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load loop range from localStorage:', error)
+    }
+
+    if (duration !== undefined) {
+      setLoopRange({ offset: 0, limit: duration })
+    }
+  }, [STORAGE_KEY, fileId, duration])
+
+  const saveLoopRange = (newLoopRange: { offset: number; limit: number }) => {
+    setLoopRange(newLoopRange)
+
+    console.log('Saving loop range for fileId:', fileId)
+    if (!fileId) return
+
+    try {
+      console.log('Saving loop range to localStorage:', newLoopRange)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newLoopRange))
+    } catch (error) {
+      console.warn('Failed to save loop range to localStorage:', error)
+    }
+  }
+
+  return { loopRange, saveLoopRange }
+}
+
+// ファイル名とサイズからハッシュを生成する関数（同期版）
+const generateFileId = (file?: File): string => {
+  if (!file) return ''
+  const fileInfo = `${file.name}_${file.size}_${file.lastModified || 0}`
+
+  // シンプルなハッシュ関数（djb2アルゴリズム）
+  let hash = 5381
+  for (let i = 0; i < fileInfo.length; i++) {
+    hash = (hash << 5) + hash + fileInfo.charCodeAt(i)
+  }
+
+  // 16進数に変換して正の値にする
+  return (hash >>> 0).toString(16)
+}
+
+const useFile = (duration: number) => {
   const { tracks } = useFileContext()
+  const track = tracks.find(
+    (track) => track.kind === 'audio' || track.kind === 'video',
+  ) as TrackAudio | TrackVideo | undefined
   const { options, saveOption } = usePersistentOption()
+  const { loopRange, saveLoopRange } = useLoopOption(
+    generateFileId(track?.file),
+    duration,
+  )
   const invertedTracks = useScriptInvert({ tracks }, options.inverted)
   const finalTracks = useScriptRange(invertedTracks, options.range)
-  return { ...finalTracks, option: options, saveOption }
+  return {
+    ...finalTracks,
+    option: options,
+    saveOption,
+    loopRange,
+    saveLoopRange,
+  }
 }
 
 export default function Scripts() {
@@ -74,24 +158,14 @@ export default function Scripts() {
   const { isPlaying, currentTime, duration, playPause, seek } =
     useSeekContext(0)
 
-  const { tracks, option, saveOption } = useFile()
+  const { tracks, option, saveOption, loopRange, saveLoopRange } =
+    useFile(duration)
 
   // OptionsPane expansion state
   const [isPaneExpanded, setIsPaneExpanded] = useState(false)
 
   // Loop state
   const [isLoopEnabled, setIsLoopEnabled] = useState(false)
-
-  // Loop range state
-  const [loopRangeOffset, setLoopRangeOffset] = useState(0)
-  const [loopRangeLimit, setLoopRangeLimit] = useState(duration)
-
-  // Update loop range limit when duration changes
-  useEffect(() => {
-    if (duration) {
-      setLoopRangeLimit(duration)
-    }
-  }, [duration])
 
   // Close OptionsPane when playback starts
   useEffect(() => {
@@ -108,8 +182,7 @@ export default function Scripts() {
 
   // Handle range slider changes
   const handleLoopRangeChange = (offset: number, limit: number) => {
-    setLoopRangeOffset(offset)
-    setLoopRangeLimit(limit)
+    saveLoopRange({ offset, limit })
   }
 
   useEffect(() => {
@@ -117,26 +190,17 @@ export default function Scripts() {
     if (!isLoopEnabled || !duration) return
 
     if (
-      currentTime < loopRangeOffset ||
-      currentTime > loopRangeLimit ||
+      currentTime < loopRange.offset ||
+      currentTime > loopRange.limit ||
       currentTime === duration
     ) {
       // Seek to loop start
-      seek(currentTime < loopRangeOffset ? loopRangeOffset : 0)
-      // NOTE: When currentTime goes over loopRangeLimit, we cannot seek directly to loopRangeOffset
+      seek(currentTime < loopRange.offset ? loopRange.offset : 0)
+      // NOTE: When currentTime goes over loopRange.limit, we cannot seek directly to loopRange.offset
       //   because useSeekContext cannot detect the seek control properly and sync with video/audio fails.
-      //   So we first seek to 0 to make the control clear, then seek to loopRangeOffset in the next call of this effect.
+      //   So we first seek to 0 to make the control clear, then seek to loopRange.offset in the next call of this effect.
     }
-  }, [
-    currentTime,
-    isLoopEnabled,
-    loopRangeOffset,
-    loopRangeLimit,
-    duration,
-    isPlaying,
-    playPause,
-    seek,
-  ])
+  }, [currentTime, isLoopEnabled, loopRange, duration, seek])
 
   useEffect(() => {
     if (tracks.length === 0) {
@@ -180,21 +244,21 @@ export default function Scripts() {
       <Card className={clsx('py-8', 'grid', 'gap-8')}>
         {tracks[0]?.kind === 'audio' && (
           <AudioGraph
-            file={tracks[0]?.audio}
+            file={tracks[0]?.file}
             graphLeftPaddingPercentage={0.25}
           />
         )}
         {tracks[0]?.kind === 'video' && (
           <div className={clsx('flex', 'justify-center')}>
-            <VideoViewer file={tracks[0]?.video} />
+            <VideoViewer file={tracks[0]?.file} />
           </div>
         )}
         {/* Range Slider and Loop Toggle */}
         <div className={clsx('flex', 'flex-col', 'gap-4', 'w-full')}>
           {/* Horizontal Range Slider */}
           <HorizontalRangeSlider
-            offsetValue={loopRangeOffset}
-            limitValue={loopRangeLimit}
+            offsetValue={loopRange.offset}
+            limitValue={loopRange.limit}
             onChange={handleLoopRangeChange}
             disabled={isPlaying}
             duration={duration}

@@ -1,11 +1,15 @@
 import { Funscript } from '@/lib/funscript'
 
+export type TrackAudio = { kind: 'audio'; file: File }
+
+export type TrackVideo = { kind: 'video'; file: File }
+
+export type Track = ({ kind: 'unset' } | TrackAudio | TrackVideo) & {
+  script?: Funscript
+}
+
 export interface FileState {
-  tracks: ((
-    | { kind: 'unset' }
-    | { kind: 'audio'; audio?: File }
-    | { kind: 'video'; video?: File }
-  ) & { script?: Funscript })[]
+  tracks: Track[]
 }
 
 export type FileDispatchAction =
@@ -28,14 +32,14 @@ export const FileStateReducer = (
       if (isAudio(action.payload.file)) {
         currState.tracks[action.payload.index] = {
           kind: 'audio',
-          audio: action.payload.file,
+          file: action.payload.file,
           script: currState.tracks[action.payload.index]?.script,
         }
       }
       if (isVideo(action.payload.file)) {
         currState.tracks[action.payload.index] = {
           kind: 'video',
-          video: action.payload.file,
+          file: action.payload.file,
           script: currState.tracks[action.payload.index]?.script,
         }
       }
