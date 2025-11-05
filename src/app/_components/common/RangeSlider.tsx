@@ -266,8 +266,14 @@ export const HorizontalRangeSlider = ({
       <div
         className={clsx('flex', 'justify-between', 'text-sm', 'text-gray-600')}
       >
-        <div>Start: {Math.round(offsetValue)}s</div>
-        <div>End: {Math.round(limitValue)}s</div>
+        <div>
+          Start: {Math.floor(offsetValue / 60)}:
+          {(Math.round(offsetValue) % 60).toString().padStart(2, '0')}
+        </div>
+        <div>
+          End: {Math.floor(limitValue / 60)}:
+          {(Math.round(limitValue) % 60).toString().padStart(2, '0')}
+        </div>
       </div>
     </div>
   )
