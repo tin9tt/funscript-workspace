@@ -155,8 +155,22 @@ const useFile = (duration: number) => {
 
 export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
+
   const { isPlaying, currentTime, duration, play, pause, seek } =
-    useSeekContext(0)
+    useSeekContext(0, {
+      preSeek: async (seekTime, isPlaying) => {
+        console.log(
+          `Preparing to seek device to ${seekTime} (isPlaying: ${isPlaying})`,
+        )
+        if (isPlaying) device.pause()
+        await device.seek(seekTime)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      },
+      onSeek: async (seekTime, isPlaying) => {
+        console.log(`Seeking device to ${seekTime} (isPlaying: ${isPlaying})`)
+        if (isPlaying) device.play(Date.now(), seekTime * 1000)
+      },
+    })
 
   const { tracks, option, saveOption, loopRange, saveLoopRange } =
     useFile(duration)
@@ -191,7 +205,11 @@ export default function Scripts() {
       currentTime === duration
     ) {
       // Seek to loop start
-      seek(currentTime < loopRange.offset ? loopRange.offset : 0)
+      if (currentTime < loopRange.offset) {
+        seek(loopRange.offset)
+      } else {
+        seek(0, { skipCallback: true })
+      }
       // NOTE: When currentTime goes over loopRange.limit, we cannot seek directly to loopRange.offset
       //   because useSeekContext cannot detect the seek control properly and sync with video/audio fails.
       //   So we first seek to 0 to make the control clear, then seek to loopRange.offset in the next call of this effect.
