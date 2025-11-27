@@ -45,10 +45,10 @@ export const FunscriptGraph = ({
       return
     }
 
-    // 時間範囲を計算（現在時刻±5秒の10秒間）
+    // 時間範囲を計算（現在時刻±10秒の20秒間）
     const centerTime = state.currentTime
-    const minTime = Math.max(0, centerTime - 5000) // 5秒前
-    const maxTime = centerTime + 5000 // 5秒後
+    const minTime = Math.max(0, centerTime - 10000) // 10秒前
+    const maxTime = centerTime + 10000 // 10秒後
 
     // 座標変換関数
     const timeToX = (at: number) =>
@@ -77,7 +77,7 @@ export const FunscriptGraph = ({
       ctx.stroke()
     }
 
-    // 表示範囲内のアクションのみをフィルタ
+    // 表示範囲内のアクションのみをフィルタ（線描画用に少し広めに取得）
     const visibleActions = state.actions
       .map((action, index) => ({ action, index }))
       .filter(
@@ -103,13 +103,14 @@ export const FunscriptGraph = ({
       tempPoint = { at: state.currentTime, pos }
     }
 
-    // 線を引くための点リスト（画面外の点も含める）
-    const allActions = state.actions.map((action, index) => ({ action, index }))
-
     // 仮の点を適切な位置に挿入
-    const drawingActions = [...allActions]
-    if (tempPoint) {
-      const insertIndex = allActions.findIndex(
+    const drawingActions = [...visibleActions]
+    if (
+      tempPoint &&
+      tempPoint.at >= minTime - 1000 &&
+      tempPoint.at <= maxTime + 1000
+    ) {
+      const insertIndex = drawingActions.findIndex(
         ({ action }) => action.at > tempPoint!.at,
       )
       if (insertIndex === -1) {
@@ -119,7 +120,7 @@ export const FunscriptGraph = ({
       }
     }
 
-    // アクション線を描画（画面外の点も含めて線を引く）
+    // アクション線を描画（表示範囲内のみ）
     ctx.strokeStyle = '#6366f1'
     ctx.lineWidth = 2
     ctx.beginPath()
@@ -183,10 +184,10 @@ export const FunscriptGraph = ({
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
-      // 時間範囲を計算（現在時刻±5秒の10秒間）
+      // 時間範囲を計算（現在時刻±10秒の20秒間）
       const centerTime = state.currentTime
-      const minTime = Math.max(0, centerTime - 5000)
-      const maxTime = centerTime + 5000
+      const minTime = Math.max(0, centerTime - 10000)
+      const maxTime = centerTime + 10000
 
       const timeToX = (at: number) =>
         ((at - minTime) / (maxTime - minTime)) * canvas.width
