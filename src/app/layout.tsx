@@ -30,6 +30,14 @@ const navigations: Navigation[] = [
       node: <FileSVG className={clsx('fill-foreground')} />,
     },
   },
+  {
+    title: 'Edit',
+    href: '/edit',
+    image: {
+      kind: 'node',
+      node: <FileSVG className={clsx('fill-foreground')} />,
+    },
+  },
 ]
 
 export default function RootLayout({

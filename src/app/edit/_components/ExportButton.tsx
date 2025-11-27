@@ -1,0 +1,75 @@
+'use client'
+
+import { useEditorContext } from '../_hooks/editor'
+import { useCallback } from 'react'
+import { sanitizeFunscript, Funscript } from '@/lib/funscript'
+
+export const ExportButton = () => {
+  const { state } = useEditorContext()
+
+  const handleExport = useCallback(() => {
+    if (!state.file || state.actions.length === 0) {
+      alert('エクスポートするデータがありません')
+      return
+    }
+
+    // Funscript 形式に変換
+    const funscript: Funscript = {
+      version: '1.0',
+      actions: state.actions,
+    }
+
+    // 検証と正規化
+    const sanitized = sanitizeFunscript(funscript)
+
+    // JSON に変換
+    const json = JSON.stringify(sanitized, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+
+    // ファイル名を生成（元のファイル名から拡張子を除いて .funscript を追加）
+    const originalName = state.file.name
+    const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '')
+    const fileName = `${nameWithoutExt}.funscript`
+
+    // ダウンロード
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [state.file, state.actions])
+
+  const handleClear = useCallback(() => {
+    if (confirm('すべてのアクションをクリアしますか？')) {
+      // clearAll を呼ぶ代わりに、actions だけをクリア
+      window.location.reload()
+    }
+  }, [])
+
+  return (
+    <div className="flex gap-4 items-center">
+      <button
+        onClick={handleExport}
+        disabled={!state.file || state.actions.length === 0}
+        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+      >
+        📥 エクスポート
+      </button>
+
+      <button
+        onClick={handleClear}
+        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+      >
+        🗑️ クリア
+      </button>
+
+      <div className="text-sm text-gray-600">
+        選択中: {state.selectedIndices.length}点 | 合計: {state.actions.length}
+        点
+      </div>
+    </div>
+  )
+}

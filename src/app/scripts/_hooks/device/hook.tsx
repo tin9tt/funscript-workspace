@@ -11,7 +11,11 @@ export const useDeviceContext = () => {
   const requestDevices = async () => {
     navigator.bluetooth
       .requestDevice({
-        acceptAllDevices: true,
+        filters: [
+          {
+            namePrefix: 'LOOB',
+          },
+        ],
         optionalServices: ['b75c49d2-04a3-4071-a0b5-35853eb08307'],
       })
       .then((device) => {
