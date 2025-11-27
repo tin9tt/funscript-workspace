@@ -232,7 +232,7 @@ export class Loob implements LoobI {
           this.funscriptActionIndex++
           continue
         }
-        await new Promise((resolve) => setTimeout(resolve, 16))
+        await new Promise((resolve) => setTimeout(resolve, 8))
       }
     }
 
