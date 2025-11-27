@@ -12,7 +12,7 @@ import { ExportButton } from './_components/ExportButton'
 function EditorContent() {
   const { state } = useEditorContext()
 
-  useRealtimeEdit({
+  const { type: currentJobType } = useRealtimeEdit({
     isPlaying: state.isPlaying,
     currentTime: state.currentTime,
   })
@@ -30,7 +30,7 @@ function EditorContent() {
       {/* グラフエリア */}
       <div data-graph-container className="space-y-4">
         <h2 className="text-xl font-semibold">編集グラフ</h2>
-        <FunscriptGraph />
+        <FunscriptGraph currentJobStateType={currentJobType} />
 
         {/* 操作ガイド */}
         <div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2">

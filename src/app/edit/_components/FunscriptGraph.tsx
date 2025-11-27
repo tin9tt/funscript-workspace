@@ -2,8 +2,13 @@
 
 import { useEditorContext } from '../_hooks/editor'
 import { useRef, useEffect, useCallback } from 'react'
+import { type JobStateType } from '../_hooks/realtimeEdit/useJobState'
 
-export const FunscriptGraph = () => {
+export const FunscriptGraph = ({
+  currentJobStateType,
+}: {
+  currentJobStateType: JobStateType
+}) => {
   const { state, setSelected, addSelected, setRangeSelected, clearSelected } =
     useEditorContext()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -75,25 +80,65 @@ export const FunscriptGraph = () => {
     // 表示範囲内のアクションのみをフィルタ
     const visibleActions = state.actions
       .map((action, index) => ({ action, index }))
-      .filter(({ action }) => action.at >= minTime - 1000 && action.at <= maxTime + 1000)
+      .filter(
+        ({ action }) =>
+          action.at >= minTime - 1000 && action.at <= maxTime + 1000,
+      )
 
-    // アクション線を描画
+    // 仮の点を追加（J/K キー押下中）
+    let tempPoint: { at: number; pos: number } | null = null
+    if (currentJobStateType !== 'none') {
+      // Job状態に応じて pos を決定
+      let pos = 0
+      switch (currentJobStateType) {
+        case '100-0': // J キー押下中
+        case '0-0': // J先行の同時押し
+          pos = 0
+          break
+        case '0-100': // K キー押下中
+        case '100-100': // K先行の同時押し
+          pos = 100
+          break
+      }
+      tempPoint = { at: state.currentTime, pos }
+    }
+
+    // 線を引くための点リスト（画面外の点も含める）
+    const allActions = state.actions.map((action, index) => ({ action, index }))
+
+    // 仮の点を適切な位置に挿入
+    const drawingActions = [...allActions]
+    if (tempPoint) {
+      const insertIndex = allActions.findIndex(
+        ({ action }) => action.at > tempPoint!.at,
+      )
+      if (insertIndex === -1) {
+        drawingActions.push({ action: tempPoint, index: -1 })
+      } else {
+        drawingActions.splice(insertIndex, 0, { action: tempPoint, index: -1 })
+      }
+    }
+
+    // アクション線を描画（画面外の点も含めて線を引く）
     ctx.strokeStyle = '#6366f1'
     ctx.lineWidth = 2
     ctx.beginPath()
-    visibleActions.forEach(({ action }, i) => {
+    let isFirstPoint = true
+    drawingActions.forEach(({ action }) => {
       const x = timeToX(action.at)
       const y = posToY(action.pos)
 
-      if (i === 0) {
+      // 画面外の点でも線は繋ぐ
+      if (isFirstPoint) {
         ctx.moveTo(x, y)
+        isFirstPoint = false
       } else {
         ctx.lineTo(x, y)
       }
     })
     ctx.stroke()
 
-    // アクション点を描画
+    // 画面内の実際のアクション点を描画
     visibleActions.forEach(({ action, index }) => {
       const x = timeToX(action.at)
       const y = posToY(action.pos)
@@ -107,7 +152,26 @@ export const FunscriptGraph = () => {
       ctx.lineWidth = 2
       ctx.stroke()
     })
-  }, [state.actions, state.selectedIndices, state.currentTime])
+
+    // 仮の点を描画（J/K キー押下中）
+    if (tempPoint && tempPoint.at >= minTime && tempPoint.at <= maxTime) {
+      const x = timeToX(tempPoint.at)
+      const y = posToY(tempPoint.pos)
+
+      ctx.beginPath()
+      ctx.arc(x, y, 5, 0, 2 * Math.PI)
+      ctx.fillStyle = '#94a3b8' // グレー系の色で仮の点を表示
+      ctx.fill()
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }, [
+    state.actions,
+    state.selectedIndices,
+    state.currentTime,
+    currentJobStateType,
+  ])
 
   // クリックで点を選択
   const handleClick = useCallback(
