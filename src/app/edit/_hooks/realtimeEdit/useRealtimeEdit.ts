@@ -18,6 +18,7 @@ export const useRealtimeEdit = ({
   const [prevAddedAction, setPrevAddedAction] =
     useState<FunscriptAction | null>(null)
   const [noneProcessed, setNoneProcessed] = useState(false)
+  const [deletedForTransition, setDeletedForTransition] = useState(false)
 
   const addAction = useCallback(
     (action: FunscriptAction) => {
@@ -52,34 +53,44 @@ export const useRealtimeEdit = ({
       case '100-0':
         if (jobState.prev === '0-0') {
           // J, K 同時押しから J 抜き → 直前の pos:0 を削除
-          deleteLastAction()
+          if (!deletedForTransition) {
+            deleteLastAction()
+            setDeletedForTransition(true)
+          }
           return
         }
         // none から他の状態への遷移時はフラグをリセット
         setNoneProcessed(false)
+        setDeletedForTransition(false)
         // J を押した → pos:100 を記録
         addAction({ at: timestamp, pos: 100 })
         break
       case '0-100':
         if (jobState.prev === '100-100') {
           // J, K 同時押しから K 抜き → 直前の pos:100 を削除
-          deleteLastAction()
+          if (!deletedForTransition) {
+            deleteLastAction()
+            setDeletedForTransition(true)
+          }
           return
         }
         // none から他の状態への遷移時はフラグをリセット
         setNoneProcessed(false)
+        setDeletedForTransition(false)
         // K を押した → pos:0 を記録
         addAction({ at: timestamp, pos: 0 })
         break
       case '0-0':
         // none から他の状態への遷移時はフラグをリセット
         setNoneProcessed(false)
+        setDeletedForTransition(false)
         // J を先に押して K を追加 → pos:0 を記録
         addAction({ at: timestamp, pos: 0 })
         break
       case '100-100':
         // none から他の状態への遷移時はフラグをリセット
         setNoneProcessed(false)
+        setDeletedForTransition(false)
         // K を先に押して J を追加 → pos:100 を記録
         addAction({ at: timestamp, pos: 100 })
         break
@@ -99,7 +110,14 @@ export const useRealtimeEdit = ({
         }
         break
     }
-  }, [jobState, currentTime, addAction, deleteLastAction, noneProcessed])
+  }, [
+    jobState,
+    currentTime,
+    addAction,
+    deleteLastAction,
+    noneProcessed,
+    deletedForTransition,
+  ])
 
   return jobState
 }
