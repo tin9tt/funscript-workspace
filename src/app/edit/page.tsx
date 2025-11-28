@@ -1,6 +1,6 @@
 'use client'
 
-import { EditorContextProvider, useEditorContext } from './_hooks/editor'
+import { useEditorContext } from './_hooks/editor'
 import { FileSelector } from './_components/FileSelector'
 import { MediaPlayer } from './_components/MediaPlayer'
 import { FunscriptGraph } from './_components/FunscriptGraph'
@@ -9,7 +9,7 @@ import { useEditorGraphHandler } from './_hooks/editorGraphHandler/useEditorGrap
 import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/useLocalStoragePersistence'
 import { ExportButton } from './_components/ExportButton'
 
-function EditorContent() {
+export default function EditPage() {
   const { state } = useEditorContext()
 
   const { type: currentJobType } = useRealtimeEdit({
@@ -65,13 +65,5 @@ function EditorContent() {
       {/* コントロールパネル */}
       <ExportButton />
     </div>
-  )
-}
-
-export default function EditPage() {
-  return (
-    <EditorContextProvider>
-      <EditorContent />
-    </EditorContextProvider>
   )
 }
