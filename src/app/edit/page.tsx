@@ -5,8 +5,8 @@ import { FileSelector } from './_components/FileSelector'
 import { MediaPlayer } from './_components/MediaPlayer'
 import { FunscriptGraph } from './_components/FunscriptGraph'
 import { useRealtimeEdit } from './_hooks/realtimeEdit/useRealtimeEdit'
-import { EditorGraphHandler } from './_components/EditorGraphHandler'
-import { LocalStoragePersistence } from './_components/LocalStoragePersistence'
+import { useEditorGraphHandler } from './_hooks/editorGraphHandler/useEditorGraphHandler'
+import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/useLocalStoragePersistence'
 import { ExportButton } from './_components/ExportButton'
 
 function EditorContent() {
@@ -16,6 +16,10 @@ function EditorContent() {
     isPlaying: state.isPlaying,
     currentTime: state.currentTime,
   })
+
+  // バックグラウンド処理フック
+  useEditorGraphHandler()
+  useLocalStoragePersistence()
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -60,10 +64,6 @@ function EditorContent() {
 
       {/* コントロールパネル */}
       <ExportButton />
-
-      {/* バックグラウンドハンドラー */}
-      <EditorGraphHandler />
-      <LocalStoragePersistence />
     </div>
   )
 }
