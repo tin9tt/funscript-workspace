@@ -54,19 +54,16 @@ export const ExportButton = () => {
       <button
         onClick={handleExport}
         disabled={!state.file || state.actions.length === 0}
-        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="px-4 py-2 rounded disabled:cursor-not-allowed"
       >
         📥 エクスポート
       </button>
 
-      <button
-        onClick={handleClear}
-        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-      >
+      <button onClick={handleClear} className="px-4 py-2 rounded">
         🗑️ クリア
       </button>
 
-      <div className="text-sm text-gray-600">
+      <div className="text-sm">
         選択中: {state.selectedIndices.length}点 | 合計: {state.actions.length}
         点
       </div>

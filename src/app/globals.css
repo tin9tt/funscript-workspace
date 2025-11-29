@@ -1,6 +1,53 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  /* Colors - Light Mode */
+  --color-background: #f2f2f2;
+  --color-foreground: #0a0a0a;
+  --color-primary: #fadf23;
+  --color-primary-variant: #ffa757;
+  --color-primary-content: #424050;
+  --color-secondary: #2347fa;
+  --color-secondary-variant: #aa8ae6;
+  --color-secondary-content: #ffffff;
+  --color-accent: #23cffa;
+  --color-accent-variant: #3e5354;
+  --color-accent-content: #0a0a0a;
+  --color-error: #e00000;
+  --color-error-content: #ffffff;
+
+  /* Background Images */
+  --background-image-lattice-primary-content-8-light:
+    repeating-linear-gradient(
+      90deg,
+      rgba(42, 40, 50, 0.06),
+      rgba(42, 40, 50, 0.06) 1px,
+      transparent 1px,
+      transparent 32px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(42, 40, 50, 0.06),
+      rgba(42, 40, 50, 0.06) 1px,
+      var(--color-background) 1px,
+      var(--color-background) 32px
+    );
+  --background-image-lattice-primary-content-8-dark:
+    repeating-linear-gradient(
+      90deg,
+      rgba(42, 40, 50, 0.4),
+      rgba(42, 40, 50, 0.4) 1px,
+      transparent 1px,
+      transparent 32px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(42, 40, 50, 0.4),
+      rgba(42, 40, 50, 0.4) 1px,
+      var(--color-background) 1px,
+      var(--color-background) 32px
+    );
+}
 
 @layer components {
   .bg-lattice-primary-content-8 {

@@ -12,7 +12,7 @@ export const Card = ({
           ['shadow-sm', 'shadow-primary-variant'],
           ['ring-[0.4px]', 'ring-primary-variant'],
           'rounded-lg',
-          'bg-background',
+          ['bg-background', 'dark:bg-foreground'],
         ],
         'p-4',
         className,

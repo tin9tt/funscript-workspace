@@ -74,7 +74,7 @@ export const OptionsPane = ({
           'rounded-l-full',
           'shadow-lg',
           'cursor-pointer',
-          'bg-background',
+          ['bg-background', 'dark:bg-foreground'],
           'transition-all',
           'duration-300',
           'ease-in-out',
@@ -84,7 +84,12 @@ export const OptionsPane = ({
         )}
         onClick={handleToggleExpand}
       >
-        <div className={clsx('px-3', 'py-6', 'text-sm', 'font-medium')}>
+        <div
+          className={clsx('px-3', 'py-6', 'text-sm', 'font-medium', [
+            'text-foreground',
+            'dark:text-background',
+          ])}
+        >
           {isExpanded ? '→' : '←'}
         </div>
       </div>

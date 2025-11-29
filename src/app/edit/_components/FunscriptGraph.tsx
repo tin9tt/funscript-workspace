@@ -237,10 +237,7 @@ export const FunscriptGraph = ({
   )
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-64 border border-gray-300 rounded-lg"
-    >
+    <div ref={containerRef} className="w-full h-64 rounded-lg">
       <canvas
         ref={canvasRef}
         onClick={handleClick}

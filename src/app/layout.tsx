@@ -26,7 +26,9 @@ const navigations: Navigation[] = [
     href: '/scripts',
     image: {
       kind: 'node',
-      node: <FileSVG className={clsx('fill-foreground')} />,
+      node: (
+        <FileSVG className={clsx('fill-foreground', 'dark:fill-background')} />
+      ),
     },
   },
   {
@@ -34,7 +36,9 @@ const navigations: Navigation[] = [
     href: '/edit',
     image: {
       kind: 'node',
-      node: <FileSVG className={clsx('fill-foreground')} />,
+      node: (
+        <FileSVG className={clsx('fill-foreground', 'dark:fill-background')} />
+      ),
     },
   },
 ]
@@ -55,12 +59,12 @@ export default function RootLayout({
       >
         <Sidebar
           navigations={navigations}
-          className={clsx('w-[240px]', 'min-w-[240px]')}
+          className={clsx('w-60', 'min-w-60')}
         />
         <div
           className={clsx(
             ['w-full', 'max-w-[calc(100%-240px)]'],
-            'bg-[top_left_-16px]',
+            'bg-position-[top_left_-16px]',
           )}
         >
           {children}

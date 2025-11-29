@@ -25,7 +25,7 @@ export const Sidebar = ({
       className={clsx(
         ['min-h-screen'],
         ['shadow-lg', 'shadow-primary-variant', 'rounded-r-lg'],
-        ['pt-32', 'bg-background'],
+        ['pt-32', 'bg-background', 'dark:bg-foreground'],
         className,
       )}
     >

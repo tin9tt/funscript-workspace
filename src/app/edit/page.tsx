@@ -37,7 +37,7 @@ export default function EditPage() {
         <FunscriptGraph currentJobStateType={currentJobType} />
 
         {/* 操作ガイド */}
-        <div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2">
+        <div className="p-4 rounded-lg text-sm space-y-2">
           <h3 className="font-semibold">操作方法</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

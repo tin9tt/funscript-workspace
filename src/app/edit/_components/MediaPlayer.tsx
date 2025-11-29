@@ -99,8 +99,8 @@ export const MediaPlayer = () => {
 
   if (!state.file) {
     return (
-      <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
-        <p className="text-gray-500">メディアファイルを選択してください</p>
+      <div className="flex items-center justify-center h-64 rounded-lg">
+        <p>メディアファイルを選択してください</p>
       </div>
     )
   }
@@ -115,7 +115,7 @@ export const MediaPlayer = () => {
       {isVideo && (
         <video
           ref={videoRef}
-          className="w-full max-h-96 bg-black rounded-lg"
+          className="w-full max-h-96 rounded-lg"
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleEnded}
         />
@@ -133,12 +133,12 @@ export const MediaPlayer = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={togglePlayPause}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-4 py-2 bg-primary-variant text-primary-content rounded hover:bg-primary-variant/80"
           >
             {state.isPlaying ? '⏸ 一時停止' : '▶ 再生'}
           </button>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm">
             {formatTime(state.currentTime / 1000)} / {formatTime(duration)}
           </div>
         </div>

@@ -37,14 +37,14 @@ export const FileSelector = () => {
 
   return (
     <div
-      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
+      className="border-2 border-dashed rounded-lg p-6 text-center transition-colors"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
       {state.file ? (
         <div className="space-y-2">
           <p className="text-sm font-medium">{state.file.name}</p>
-          <label className="inline-block px-4 py-2 bg-gray-200 text-gray-700 rounded cursor-pointer hover:bg-gray-300">
+          <label className="inline-block px-4 py-2 bg-primary-variant text-primary-content rounded cursor-pointer hover:bg-primary-variant/80">
             ファイルを変更
             <input
               type="file"
@@ -59,7 +59,7 @@ export const FileSelector = () => {
           <p className="text-gray-600">
             ドラッグ&ドロップまたはクリックしてファイルを選択
           </p>
-          <label className="inline-block px-4 py-2 bg-blue-500 text-white rounded cursor-pointer hover:bg-blue-600">
+          <label className="inline-block px-4 py-2 bg-primary-variant text-primary-content rounded cursor-pointer hover:bg-primary-variant/80">
             ファイルを選択
             <input
               type="file"
