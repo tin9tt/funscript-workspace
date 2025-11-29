@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import clsx from 'clsx'
 import { Navigation, Sidebar } from './_components/Sidebar'
-import { AuthContextProvider } from './_hooks/auth/context'
 import FileSVG from '@/assets/images/file.svg'
 
 const geistSans = Geist({
@@ -47,28 +46,26 @@ export default function RootLayout({
 }>) {
   return (
     <html>
-      <AuthContextProvider>
-        <body
+      <body
+        className={clsx(
+          [geistSans.variable, geistMono.variable, 'antialiased'],
+          ['min-h-screen', 'w-full'],
+          ['flex', 'bg-lattice-primary-content-8'],
+        )}
+      >
+        <Sidebar
+          navigations={navigations}
+          className={clsx('w-[240px]', 'min-w-[240px]')}
+        />
+        <div
           className={clsx(
-            [geistSans.variable, geistMono.variable, 'antialiased'],
-            ['min-h-screen', 'w-full'],
-            ['flex', 'bg-lattice-primary-content-8'],
+            ['w-full', 'max-w-[calc(100%-240px)]'],
+            'bg-[top_left_-16px]',
           )}
         >
-          <Sidebar
-            navigations={navigations}
-            className={clsx('w-[240px]', 'min-w-[240px]')}
-          />
-          <div
-            className={clsx(
-              ['w-full', 'max-w-[calc(100%-240px)]'],
-              'bg-[top_left_-16px]',
-            )}
-          >
-            {children}
-          </div>
-        </body>
-      </AuthContextProvider>
+          {children}
+        </div>
+      </body>
     </html>
   )
 }
