@@ -8,7 +8,7 @@ It's a funscript player and editor that works with video and audio.
 
 ```sh
 docker run --rm \
-  -p 80/tcp \
+  -p 3000/tcp \
   --name fsworkspace \
   tin9tt/funscript-workspace:latest
 ```
