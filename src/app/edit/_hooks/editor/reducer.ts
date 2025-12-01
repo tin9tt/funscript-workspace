@@ -201,7 +201,12 @@ export const EditorStateReducer = (
     }
 
     case 'clear all':
-      return defaultEditorState()
+      return {
+        ...state,
+        actions: [],
+        selectedIndices: [],
+        lastSelectedIndex: null,
+      }
 
     default:
       return state

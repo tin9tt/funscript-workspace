@@ -3,9 +3,10 @@
 import { useEditorContext } from '../_hooks/editor'
 import { useCallback } from 'react'
 import { sanitizeFunscript, Funscript } from '@/lib/funscript'
+import { generateFileId } from '@/lib/utils/fileId'
 
 export const ExportButton = () => {
-  const { state } = useEditorContext()
+  const { state, clearAll } = useEditorContext()
 
   const handleExport = useCallback(() => {
     if (!state.file || state.actions.length === 0) {
@@ -43,11 +44,12 @@ export const ExportButton = () => {
   }, [state.file, state.actions])
 
   const handleClear = useCallback(() => {
+    if (!state.file) return
+
     if (confirm('すべてのアクションをクリアしますか？')) {
-      // clearAll を呼ぶ代わりに、actions だけをクリア
-      window.location.reload()
+      clearAll()
     }
-  }, [])
+  }, [state.file, clearAll])
 
   return (
     <div className="flex gap-4 items-center">
