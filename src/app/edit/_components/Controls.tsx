@@ -3,9 +3,8 @@
 import { useEditorContext } from '../_hooks/editor'
 import { useCallback } from 'react'
 import { sanitizeFunscript, Funscript } from '@/lib/funscript'
-import { generateFileId } from '@/lib/utils/fileId'
 
-export const ExportButton = () => {
+export const Controls = () => {
   const { state, clearAll } = useEditorContext()
 
   const handleExport = useCallback(() => {

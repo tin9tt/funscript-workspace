@@ -7,7 +7,7 @@ import { FunscriptGraph } from './_components/FunscriptGraph'
 import { useRealtimeEdit } from './_hooks/realtimeEdit/useRealtimeEdit'
 import { useEditorGraphHandler } from './_hooks/editorGraphHandler/useEditorGraphHandler'
 import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/useLocalStoragePersistence'
-import { ExportButton } from './_components/ExportButton'
+import { Controls } from './_components/Controls'
 
 export default function EditPage() {
   const { state } = useEditorContext()
@@ -63,7 +63,7 @@ export default function EditPage() {
       </div>
 
       {/* コントロールパネル */}
-      <ExportButton />
+      <Controls />
     </div>
   )
 }
