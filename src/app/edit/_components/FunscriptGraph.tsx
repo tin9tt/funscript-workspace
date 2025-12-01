@@ -45,10 +45,9 @@ export const FunscriptGraph = ({
       return
     }
 
-    // 時間範囲を計算（現在時刻±10秒の20秒間）
-    const centerTime = state.currentTime
-    const minTime = Math.max(0, centerTime - 10000) // 10秒前
-    const maxTime = centerTime + 10000 // 10秒後
+    // 時間範囲を計算（常に現在時刻を中央に配置）
+    const minTime = state.currentTime - 10000
+    const maxTime = state.currentTime + 10000
 
     // 座標変換関数
     const timeToX = (at: number) =>
@@ -184,10 +183,9 @@ export const FunscriptGraph = ({
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
-      // 時間範囲を計算（現在時刻±10秒の20秒間）
-      const centerTime = state.currentTime
-      const minTime = Math.max(0, centerTime - 10000)
-      const maxTime = centerTime + 10000
+      // 時間範囲を計算（常に現在時刻を中央に配置）
+      const minTime = state.currentTime - 10000
+      const maxTime = state.currentTime + 10000
 
       const timeToX = (at: number) =>
         ((at - minTime) / (maxTime - minTime)) * canvas.width
