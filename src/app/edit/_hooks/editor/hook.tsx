@@ -107,9 +107,47 @@ export const useEditorContext = () => {
     [dispatch],
   )
 
+  const moveSelectedTime = useCallback(
+    (deltaTime: number) => {
+      dispatch({ kind: 'move selected time', payload: { deltaTime } })
+    },
+    [dispatch],
+  )
+
   const scaleSelected = useCallback(
     (factor: number) => {
       dispatch({ kind: 'scale selected', payload: { factor } })
+    },
+    [dispatch],
+  )
+
+  const scaleSelectedTime = useCallback(
+    (factor: number) => {
+      dispatch({ kind: 'scale selected time', payload: { factor } })
+    },
+    [dispatch],
+  )
+
+  const scaleSelectedTimeFromPivot = useCallback(
+    (factor: number, pivotTime: number) => {
+      dispatch({
+        kind: 'scale selected time from pivot',
+        payload: { factor, pivotTime },
+      })
+    },
+    [dispatch],
+  )
+
+  const updateSelectedFromBase = useCallback(
+    (
+      indices: number[],
+      baseActions: FunscriptAction[],
+      updateFn: (action: FunscriptAction, index: number) => FunscriptAction,
+    ) => {
+      dispatch({
+        kind: 'update selected from base',
+        payload: { indices, baseActions, updateFn },
+      })
     },
     [dispatch],
   )
@@ -134,7 +172,11 @@ export const useEditorContext = () => {
     setCurrentTime,
     setKeyState,
     moveSelected,
+    moveSelectedTime,
     scaleSelected,
+    scaleSelectedTime,
+    scaleSelectedTimeFromPivot,
+    updateSelectedFromBase,
     clearAll,
   }
 }

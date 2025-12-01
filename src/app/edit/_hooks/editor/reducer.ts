@@ -43,7 +43,21 @@ export type EditorDispatchAction =
   | { kind: 'set current time'; payload: { time: number } }
   | { kind: 'set key state'; payload: Partial<EditorState['keyState']> }
   | { kind: 'move selected'; payload: { delta: number } }
+  | { kind: 'move selected time'; payload: { deltaTime: number } }
   | { kind: 'scale selected'; payload: { factor: number } }
+  | { kind: 'scale selected time'; payload: { factor: number } }
+  | {
+      kind: 'scale selected time from pivot'
+      payload: { factor: number; pivotTime: number }
+    }
+  | {
+      kind: 'update selected from base'
+      payload: {
+        indices: number[]
+        baseActions: FunscriptAction[]
+        updateFn: (action: FunscriptAction, index: number) => FunscriptAction
+      }
+    }
   | { kind: 'clear all' }
 
 export const defaultEditorState = (): EditorState => ({
@@ -197,6 +211,100 @@ export const EditorStateReducer = (
           }
         }
       })
+      return { ...state, actions: newActions }
+    }
+
+    case 'move selected time': {
+      const newActions = [...state.actions]
+      state.selectedIndices.forEach((index) => {
+        const actionItem = newActions[index]
+        if (actionItem) {
+          newActions[index] = {
+            ...actionItem,
+            at: Math.max(0, actionItem.at + action.payload.deltaTime),
+          }
+        }
+      })
+      // 時刻順にソート
+      newActions.sort((a, b) => a.at - b.at)
+      return { ...state, actions: newActions }
+    }
+
+    case 'scale selected time': {
+      if (state.selectedIndices.length === 0) return state
+
+      // 選択されたアクションを取得
+      const selectedActions = state.selectedIndices
+        .map((i) => ({ index: i, action: state.actions[i] }))
+        .sort((a, b) => a.action.at - b.action.at)
+
+      // 連続しているかチェック
+      let isContinuous = true
+      for (let i = 0; i < selectedActions.length - 1; i++) {
+        if (selectedActions[i + 1].index !== selectedActions[i].index + 1) {
+          isContinuous = false
+          break
+        }
+      }
+
+      // 連続していない場合は何もしない
+      if (!isContinuous) return state
+
+      // 基準点（最初のアクションの時刻）
+      const baseTime = selectedActions[0].action.at
+
+      const newActions = [...state.actions]
+      selectedActions.forEach(({ index, action: actionItem }) => {
+        const timeDiff = actionItem.at - baseTime
+        const newTime = baseTime + timeDiff * action.payload.factor
+        newActions[index] = {
+          ...actionItem,
+          at: Math.max(0, newTime),
+        }
+      })
+
+      // 時刻順にソート
+      newActions.sort((a, b) => a.at - b.at)
+      return { ...state, actions: newActions }
+    }
+
+    case 'scale selected time from pivot': {
+      if (state.selectedIndices.length === 0) return state
+
+      const { factor, pivotTime } = action.payload
+
+      // 選択されたアクションを取得
+      const selectedActions = state.selectedIndices
+        .map((i) => ({ index: i, action: state.actions[i] }))
+        .filter((item) => item.action !== undefined)
+
+      const newActions = [...state.actions]
+      selectedActions.forEach(({ index, action: actionItem }) => {
+        const timeDiff = actionItem.at - pivotTime
+        const newTime = pivotTime + timeDiff * factor
+        newActions[index] = {
+          ...actionItem,
+          at: Math.max(0, newTime),
+        }
+      })
+
+      // 時刻順にソート
+      newActions.sort((a, b) => a.at - b.at)
+      return { ...state, actions: newActions }
+    }
+
+    case 'update selected from base': {
+      const { indices, baseActions, updateFn } = action.payload
+      const newActions = [...state.actions]
+
+      indices.forEach((index) => {
+        if (baseActions[index]) {
+          newActions[index] = updateFn(baseActions[index], index)
+        }
+      })
+
+      // 時刻順にソート
+      newActions.sort((a, b) => a.at - b.at)
       return { ...state, actions: newActions }
     }
 

@@ -12,13 +12,48 @@ export const FunscriptGraph = ({
 }: {
   currentJobStateType: JobStateType
 }) => {
-  const { state, setSelected, addSelected, setRangeSelected, clearSelected } =
-    useEditorContext()
+  const {
+    state,
+    setSelected,
+    addSelected,
+    setRangeSelected,
+    clearSelected,
+    moveSelected,
+    moveSelectedTime,
+    scaleSelectedTime,
+    scaleSelectedTimeFromPivot,
+    updateSelectedFromBase,
+  } = useEditorContext()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [peaks, setPeaks] = useState<(number[] | Float32Array)[] | null>(null)
   const [duration, setDuration] = useState<number>(0)
+
+  // ドラッグ状態の管理
+  const [isDragging, setIsDragging] = useState(false)
+  const [hasDragged, setHasDragged] = useState(false)
+  const [dragMode, setDragMode] = useState<
+    | 'horizontal'
+    | 'vertical'
+    | 'scale'
+    | 'range-move'
+    | 'range-left'
+    | 'range-right'
+    | null
+  >(null)
+  const [dragStartPos, setDragStartPos] = useState<{
+    x: number
+    y: number
+  } | null>(null)
+  const [dragStartActions, setDragStartActions] = useState<
+    typeof state.actions
+  >([])
+  const [dragStartIndices, setDragStartIndices] = useState<number[]>([])
+  const [dragPivotTime, setDragPivotTime] = useState<number>(0)
+
+  // ホバー状態の管理
+  const [hoverCursor, setHoverCursor] = useState<string>('default')
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
@@ -281,6 +316,24 @@ export const FunscriptGraph = ({
       ctx.stroke()
     }
 
+    // 選択範囲の背景を描画
+    if (state.selectedIndices.length > 0) {
+      const selectedActions = state.selectedIndices
+        .map((i) => state.actions[i])
+        .filter((a) => a !== undefined)
+        .sort((a, b) => a.at - b.at)
+
+      if (selectedActions.length > 0) {
+        const minTime = selectedActions[0].at
+        const maxTime = selectedActions[selectedActions.length - 1].at
+        const minX = timeToX(minTime)
+        const maxX = timeToX(maxTime)
+
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)'
+        ctx.fillRect(minX, 0, maxX - minX, canvas.height)
+      }
+    }
+
     // アクション点を描画
     visibleActions.forEach((action) => {
       const index = state.actions.indexOf(action)
@@ -324,6 +377,12 @@ export const FunscriptGraph = ({
   // クリックで点を選択
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // ドラッグ操作の後は選択を変更しない
+      if (hasDragged) {
+        setHasDragged(false)
+        return
+      }
+
       const canvas = canvasRef.current
       if (!canvas) return
 
@@ -386,6 +445,7 @@ export const FunscriptGraph = ({
       }
     },
     [
+      hasDragged,
       state.actions,
       state.lastSelectedIndex,
       state.currentTime,
@@ -395,6 +455,389 @@ export const FunscriptGraph = ({
       clearSelected,
     ],
   )
+
+  // マウスダウン時にドラッグ開始を判定
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current
+      if (!canvas || state.selectedIndices.length === 0) return
+
+      const rect = canvas.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      // Canvas座標に変換
+      const canvasX = (mouseX / rect.width) * canvas.width
+      const canvasY = (mouseY / rect.height) * canvas.height
+
+      // 再生時刻を基準にした時刻範囲を計算
+      const currentTimeSec = state.currentTime / 1000
+      const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
+      const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+
+      // 座標変換関数
+      const timeToX = (at: number) => {
+        const timeSec = at / 1000
+        const relativeTime = timeSec - startTimeSec
+        return (relativeTime / (endTimeSec - startTimeSec)) * canvas.width
+      }
+      const posToY = (pos: number) =>
+        canvas.height - (pos / 100) * canvas.height
+
+      // 選択範囲の情報を計算
+      const selectedActions = state.selectedIndices
+        .map((i) => state.actions[i])
+        .filter((a) => a !== undefined)
+        .sort((a, b) => a.at - b.at)
+
+      if (selectedActions.length === 0) return
+
+      const minTime = selectedActions[0].at
+      const maxTime = selectedActions[selectedActions.length - 1].at
+      const minX = timeToX(minTime)
+      const maxX = timeToX(maxTime)
+      const edgeThreshold = 10
+
+      // 選択範囲の端に近いかチェック
+      const nearLeftEdge = Math.abs(canvasX - minX) < edgeThreshold
+      const nearRightEdge = Math.abs(canvasX - maxX) < edgeThreshold
+      const inRangeX = canvasX >= minX && canvasX <= maxX
+      const inRangeY = true // Y座標は制限しない
+
+      // 選択されたポイントに近いかチェック
+      let nearPoint = false
+      let nearHorizontal = false
+      let nearVertical = false
+      const threshold = 15
+
+      for (const index of state.selectedIndices) {
+        const action = state.actions[index]
+        if (!action) continue
+
+        const px = timeToX(action.at)
+        const py = posToY(action.pos)
+
+        const dx = Math.abs(canvasX - px)
+        const dy = Math.abs(canvasY - py)
+
+        if (dx < threshold && dy < threshold) {
+          nearPoint = true
+          if (dx < dy) {
+            nearHorizontal = true
+          } else {
+            nearVertical = true
+          }
+          break
+        }
+      }
+
+      // ドラッグモードの判定
+      let mode: typeof dragMode = null
+
+      if (nearLeftEdge && selectedActions.length > 1) {
+        // 左端のドラッグ: 右端を起点に伸縮
+        mode = 'range-left'
+        setDragPivotTime(maxTime)
+      } else if (nearRightEdge && selectedActions.length > 1) {
+        // 右端のドラッグ: 左端を起点に伸縮
+        mode = 'range-right'
+        setDragPivotTime(minTime)
+      } else if (inRangeX && inRangeY && !nearPoint) {
+        // 選択範囲の背景部分: 移動
+        mode = 'range-move'
+      } else if (nearPoint) {
+        // ポイントに近い: 既存のロジック
+        // 選択されたアクションが連続しているかチェック（スケールモード用）
+        const sortedIndices = [...state.selectedIndices].sort((a, b) => a - b)
+        let isContinuous = true
+        for (let i = 0; i < sortedIndices.length - 1; i++) {
+          if (sortedIndices[i + 1] !== sortedIndices[i] + 1) {
+            isContinuous = false
+            break
+          }
+        }
+
+        if (e.shiftKey && isContinuous && sortedIndices.length > 1) {
+          mode = 'scale'
+        } else if (nearHorizontal) {
+          mode = 'horizontal'
+        } else {
+          mode = 'vertical'
+        }
+      }
+
+      if (!mode) return
+
+      // ドラッグ開始
+      e.preventDefault()
+      setIsDragging(true)
+      setDragStartPos({ x: canvasX, y: canvasY })
+      setDragStartActions([...state.actions])
+      setDragStartIndices([...state.selectedIndices])
+      setDragMode(mode)
+    },
+    [state.actions, state.selectedIndices, state.currentTime],
+  )
+
+  // マウスムーブ時にドラッグ処理
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // ドラッグ中でない場合はホバー判定のみ
+      if (!isDragging) {
+        // ホバー判定のロジックをここに展開
+        const canvas = canvasRef.current
+        if (!canvas || state.selectedIndices.length === 0) {
+          setHoverCursor('default')
+          return
+        }
+
+        const rect = canvas.getBoundingClientRect()
+        const mouseX = e.clientX - rect.left
+        const mouseY = e.clientY - rect.top
+
+        // Canvas座標に変換
+        const canvasX = (mouseX / rect.width) * canvas.width
+        const canvasY = (mouseY / rect.height) * canvas.height
+
+        // 再生時刻を基準にした時刻範囲を計算
+        const currentTimeSec = state.currentTime / 1000
+        const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
+        const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+
+        // 座標変換関数
+        const timeToX = (at: number) => {
+          const timeSec = at / 1000
+          const relativeTime = timeSec - startTimeSec
+          return (relativeTime / (endTimeSec - startTimeSec)) * canvas.width
+        }
+        const posToY = (pos: number) =>
+          canvas.height - (pos / 100) * canvas.height
+
+        // 選択範囲の情報を計算
+        const selectedActions = state.selectedIndices
+          .map((i) => state.actions[i])
+          .filter((a) => a !== undefined)
+          .sort((a, b) => a.at - b.at)
+
+        if (selectedActions.length === 0) {
+          setHoverCursor('default')
+          return
+        }
+
+        const minTime = selectedActions[0].at
+        const maxTime = selectedActions[selectedActions.length - 1].at
+        const minX = timeToX(minTime)
+        const maxX = timeToX(maxTime)
+        const edgeThreshold = 10
+
+        // 選択範囲の端に近いかチェック
+        const nearLeftEdge = Math.abs(canvasX - minX) < edgeThreshold
+        const nearRightEdge = Math.abs(canvasX - maxX) < edgeThreshold
+        const inRangeX = canvasX >= minX && canvasX <= maxX
+
+        // ポイントに近いかチェック
+        let nearPoint = false
+        const threshold = 15
+
+        for (const index of state.selectedIndices) {
+          const action = state.actions[index]
+          if (!action) continue
+
+          const px = timeToX(action.at)
+          const py = posToY(action.pos)
+
+          const dx = Math.abs(canvasX - px)
+          const dy = Math.abs(canvasY - py)
+
+          if (dx < threshold && dy < threshold) {
+            nearPoint = true
+            break
+          }
+        }
+
+        // カーソルの種類を決定
+        if (nearLeftEdge && selectedActions.length > 1) {
+          setHoverCursor('col-resize')
+        } else if (nearRightEdge && selectedActions.length > 1) {
+          setHoverCursor('col-resize')
+        } else if (inRangeX && !nearPoint) {
+          setHoverCursor('move')
+        } else if (nearPoint) {
+          setHoverCursor('pointer')
+        } else {
+          setHoverCursor('default')
+        }
+        return
+      }
+
+      if (!dragStartPos || !dragMode) return
+
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const rect = canvas.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      // Canvas座標に変換
+      const canvasX = (mouseX / rect.width) * canvas.width
+      const canvasY = (mouseY / rect.height) * canvas.height
+
+      const dx = canvasX - dragStartPos.x
+      const dy = canvasY - dragStartPos.y
+
+      // ドラッグが開始されたことを記録（移動閾値を超えたら）
+      const dragThreshold = 3
+      if (
+        !hasDragged &&
+        (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)
+      ) {
+        setHasDragged(true)
+      }
+
+      // 再生時刻を基準にした時刻範囲を計算
+      const currentTimeSec = state.currentTime / 1000
+      const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
+      const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+      const viewDuration = (endTimeSec - startTimeSec) * 1000
+
+      if (dragMode === 'horizontal') {
+        // 左右（時間軸）の移動 - 開始時の状態から計算
+        const deltaTime = (dx / canvas.width) * viewDuration
+        updateSelectedFromBase(
+          dragStartIndices,
+          dragStartActions,
+          (action) => ({
+            ...action,
+            at: Math.max(0, action.at + deltaTime),
+          }),
+        )
+      } else if (dragMode === 'vertical') {
+        // 上下（pos）の移動 - 開始時の状態から計算
+        const deltaPos = -(dy / canvas.height) * 100
+        updateSelectedFromBase(
+          dragStartIndices,
+          dragStartActions,
+          (action) => ({
+            ...action,
+            pos: Math.max(0, Math.min(100, action.pos + deltaPos)),
+          }),
+        )
+      } else if (dragMode === 'scale') {
+        // 時間軸の伸縮 - 開始時の状態から計算
+        const factor = Math.max(0.1, 1 + dx / canvas.width)
+        const selectedStartActions = dragStartIndices
+          .map((i) => ({ index: i, action: dragStartActions[i] }))
+          .filter((item) => item.action !== undefined)
+          .sort((a, b) => a.action.at - b.action.at)
+
+        if (selectedStartActions.length > 0) {
+          const baseTime = selectedStartActions[0].action.at
+          updateSelectedFromBase(
+            dragStartIndices,
+            dragStartActions,
+            (action) => {
+              const timeDiff = action.at - baseTime
+              const newTime = baseTime + timeDiff * factor
+              return {
+                ...action,
+                at: Math.max(0, newTime),
+              }
+            },
+          )
+        }
+      } else if (dragMode === 'range-move') {
+        // 選択範囲全体を移動 - 開始時の状態から計算
+        const deltaTime = (dx / canvas.width) * viewDuration
+        updateSelectedFromBase(
+          dragStartIndices,
+          dragStartActions,
+          (action) => ({
+            ...action,
+            at: Math.max(0, action.at + deltaTime),
+          }),
+        )
+      } else if (dragMode === 'range-left' || dragMode === 'range-right') {
+        // 選択範囲の端を伸縮 - 開始時の状態から計算
+        if (dragStartActions.length > 0 && dragStartIndices.length > 0) {
+          const selectedStartActions = dragStartIndices
+            .map((i) => ({ index: i, action: dragStartActions[i] }))
+            .filter((item) => item.action !== undefined)
+            .sort((a, b) => a.action.at - b.action.at)
+
+          if (selectedStartActions.length > 1) {
+            const baseTime = dragPivotTime
+            const movingTime =
+              dragMode === 'range-left'
+                ? selectedStartActions[0].action.at
+                : selectedStartActions[selectedStartActions.length - 1].action
+                    .at
+
+            const originalRange = Math.abs(movingTime - baseTime)
+            const deltaTime = (dx / canvas.width) * viewDuration
+            const newMovingTime = movingTime + deltaTime
+            const newRange = Math.abs(newMovingTime - baseTime)
+
+            // スケール係数を計算（最小値を設定して縮小しすぎないように）
+            const factor = originalRange > 0 ? newRange / originalRange : 1
+            const clampedFactor = Math.max(0.1, factor)
+
+            updateSelectedFromBase(
+              dragStartIndices,
+              dragStartActions,
+              (action) => {
+                const timeDiff = action.at - baseTime
+                const newTime = baseTime + timeDiff * clampedFactor
+                return {
+                  ...action,
+                  at: Math.max(0, newTime),
+                }
+              },
+            )
+          }
+        }
+      }
+    },
+    [
+      isDragging,
+      hasDragged,
+      dragStartPos,
+      dragMode,
+      dragPivotTime,
+      dragStartActions,
+      dragStartIndices,
+      state.currentTime,
+      state.selectedIndices,
+      state.actions,
+      updateSelectedFromBase,
+    ],
+  )
+
+  // マウスアップ時にドラッグ終了
+  const handleMouseUp = useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false)
+      setDragMode(null)
+      setDragStartPos(null)
+      setDragStartActions([])
+      setDragStartIndices([])
+      setDragPivotTime(0)
+      // hasDraggedはhandleClickでリセットされるのでここではリセットしない
+    }
+  }, [isDragging])
+
+  // グローバルマウスアップイベント
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseUp = () => {
+        handleMouseUp()
+      }
+      window.addEventListener('mouseup', handleGlobalMouseUp)
+      return () => {
+        window.removeEventListener('mouseup', handleGlobalMouseUp)
+      }
+    }
+  }, [isDragging, handleMouseUp])
 
   return (
     <div
@@ -413,11 +856,25 @@ export const FunscriptGraph = ({
       {/* グラフ描画用のCanvas */}
       <canvas
         ref={canvasRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onClick={handleClick}
-        className="absolute inset-0 cursor-pointer"
+        className="absolute inset-0"
         style={{
           background: 'transparent',
           zIndex: 10,
+          cursor: isDragging
+            ? dragMode === 'horizontal'
+              ? 'ew-resize'
+              : dragMode === 'vertical'
+                ? 'ns-resize'
+                : dragMode === 'range-move'
+                  ? 'move'
+                  : dragMode === 'range-left' || dragMode === 'range-right'
+                    ? 'col-resize'
+                    : 'move'
+            : hoverCursor,
         }}
       />
 
