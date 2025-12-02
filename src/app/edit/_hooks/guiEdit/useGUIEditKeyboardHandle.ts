@@ -4,16 +4,29 @@ import { usePlayback } from '../playback'
 import { useActions } from '../actions'
 import { useSelect } from '../select'
 import { useEffect, useCallback } from 'react'
+import { FunscriptAction } from '@/lib/funscript'
+
+interface UseGUIEditKeyboardHandleParams {
+  updateSelectedFromBase: (
+    indices: number[],
+    baseActions: FunscriptAction[],
+    updateFn: (action: FunscriptAction, index: number) => FunscriptAction,
+  ) => void
+  actions: FunscriptAction[]
+  selectedIndices: number[]
+}
 
 /**
  * グラフ編集のキーボード・ホイール操作を処理するフック
- * UI を持たないため、コンポーネントではなくフックとして実装
  */
-export const useEditorGraphHandler = () => {
+export const useGUIEditKeyboardHandle = ({
+  updateSelectedFromBase,
+  actions,
+  selectedIndices,
+}: UseGUIEditKeyboardHandleParams) => {
   const { isPlaying } = usePlayback()
-  const { actions, updateSelectedFromBase, deleteActions, undo, redo } =
-    useActions(null)
-  const { selectedIndices, clearSelected } = useSelect()
+  const { deleteActions, undo, redo } = useActions(null)
+  const { clearSelected } = useSelect()
 
   // 選択された点を上下移動
   const moveSelected = useCallback(

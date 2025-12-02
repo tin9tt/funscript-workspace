@@ -209,7 +209,7 @@ export const FunscriptGraph = ({
     }
 
     // アクションがない場合は基準線を追加
-    if (edit.actions.length === 0) {
+    if (edit.effectiveActions.length === 0) {
       ctx.strokeStyle = '#e5e7eb'
       ctx.lineWidth = 1
       ctx.setLineDash([5, 5])
@@ -241,14 +241,14 @@ export const FunscriptGraph = ({
     // 表示範囲内のアクションのみをフィルタリング
     const startTimeMs = startTimeSec * 1000
     const endTimeMs = endTimeSec * 1000
-    const visibleActions = edit.actions.filter(
+    const visibleActions = edit.effectiveActions.filter(
       (action) => action.at >= startTimeMs && action.at <= endTimeMs,
     )
 
     // 描画用のアクション配列を作成
     const drawingActions = visibleActions.map((action) => ({
       action,
-      index: edit.actions.indexOf(action),
+      index: edit.effectiveActions.indexOf(action),
     }))
 
     if (tempPoint && tempPoint.at >= startTimeMs && tempPoint.at <= endTimeMs) {
@@ -285,7 +285,7 @@ export const FunscriptGraph = ({
     // 選択範囲の背景を描画
     if (edit.selectedIndices.length > 0) {
       const selectedActions = edit.selectedIndices
-        .map((i) => edit.actions[i])
+        .map((i) => edit.effectiveActions[i])
         .filter((a) => a !== undefined)
         .sort((a, b) => a.at - b.at)
 
@@ -298,10 +298,10 @@ export const FunscriptGraph = ({
           const selectedIndex = edit.selectedIndices[0]
           const selectedAction = selectedActions[0]
           const prevAction =
-            selectedIndex > 0 ? edit.actions[selectedIndex - 1] : null
+            selectedIndex > 0 ? edit.effectiveActions[selectedIndex - 1] : null
           const nextAction =
-            selectedIndex < edit.actions.length - 1
-              ? edit.actions[selectedIndex + 1]
+            selectedIndex < edit.effectiveActions.length - 1
+              ? edit.effectiveActions[selectedIndex + 1]
               : null
 
           // 左側の境界
@@ -339,7 +339,7 @@ export const FunscriptGraph = ({
 
     // アクション点を描画
     visibleActions.forEach((action) => {
-      const index = edit.actions.indexOf(action)
+      const index = edit.effectiveActions.indexOf(action)
       const x = timeToX(action.at)
       const y = posToY(action.pos)
       const isSelected = edit.selectedIndices.includes(index)
@@ -371,7 +371,7 @@ export const FunscriptGraph = ({
       }
     }
   }, [
-    edit.actions,
+    edit.effectiveActions,
     edit.selectedIndices,
     currentJobStateType,
     edit.currentTime,

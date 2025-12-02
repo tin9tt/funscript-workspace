@@ -5,7 +5,6 @@ import { FileSelector } from './_components/FileSelector'
 import { MediaPlayer } from './_components/MediaPlayer'
 import { FunscriptGraph } from './_components/FunscriptGraph'
 import { useRealtimeEdit } from './_hooks/realtimeEdit/useRealtimeEdit'
-import { useEditorGraphHandler } from './_hooks/editorGraphHandler/useEditorGraphHandler'
 import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/useLocalStoragePersistence'
 import { Controls } from './_components/Controls'
 
@@ -18,7 +17,6 @@ export default function EditPage() {
   })
 
   // バックグラウンド処理フック
-  useEditorGraphHandler()
   useLocalStoragePersistence()
 
   return (

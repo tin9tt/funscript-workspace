@@ -687,6 +687,7 @@ export const useGUIEditInputHandle = ({
       setIsDragging(false)
       setDragMode(null)
       setDragStartPos(null)
+      setHasDragged(false)
       setDragStartActions([])
       setDragStartIndices([])
       setDragPivotTime(0)
