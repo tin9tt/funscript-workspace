@@ -20,6 +20,11 @@ export interface EditorState {
     jPressedAt: number | null
     kPressedAt: number | null
   }
+  // Undo/Redo用の履歴
+  history: {
+    past: FunscriptAction[][]
+    future: FunscriptAction[][]
+  }
 }
 
 export type EditorDispatchAction =
@@ -58,6 +63,8 @@ export type EditorDispatchAction =
         updateFn: (action: FunscriptAction, index: number) => FunscriptAction
       }
     }
+  | { kind: 'undo' }
+  | { kind: 'redo' }
   | { kind: 'clear all' }
 
 export const defaultEditorState = (): EditorState => ({
@@ -73,7 +80,29 @@ export const defaultEditorState = (): EditorState => ({
     jPressedAt: null,
     kPressedAt: null,
   },
+  history: {
+    past: [],
+    future: [],
+  },
 })
+
+// 履歴を記録するヘルパー関数
+const saveToHistory = (
+  state: EditorState,
+  newActions: FunscriptAction[],
+): EditorState => {
+  const maxHistorySize = 50 // 履歴の最大サイズ
+  const newPast = [...state.history.past, state.actions].slice(-maxHistorySize)
+
+  return {
+    ...state,
+    actions: newActions,
+    history: {
+      past: newPast,
+      future: [], // 新しい操作を行ったらfutureをクリア
+    },
+  }
+}
 
 export const EditorStateReducer = (
   state: EditorState,
@@ -94,27 +123,30 @@ export const EditorStateReducer = (
         actions: [...action.payload.actions],
         selectedIndices: [],
         lastSelectedIndex: null,
+        history: {
+          past: [],
+          future: [],
+        },
       }
 
     case 'add action': {
       const newActions = [...state.actions, action.payload.action].sort(
         (a, b) => a.at - b.at,
       )
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'update action': {
       const newActions = [...state.actions]
       newActions[action.payload.index] = action.payload.action
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'delete actions': {
       const indicesToDelete = new Set(action.payload.indices)
       const newActions = state.actions.filter((_, i) => !indicesToDelete.has(i))
       return {
-        ...state,
-        actions: newActions,
+        ...saveToHistory(state, newActions),
         selectedIndices: [],
         lastSelectedIndex: null,
       }
@@ -123,7 +155,7 @@ export const EditorStateReducer = (
     case 'delete last action': {
       if (state.actions.length === 0) return state
       const newActions = state.actions.slice(0, -1)
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'set selected':
@@ -194,7 +226,7 @@ export const EditorStateReducer = (
           }
         }
       })
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'scale selected': {
@@ -211,7 +243,7 @@ export const EditorStateReducer = (
           }
         }
       })
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'move selected time': {
@@ -227,7 +259,7 @@ export const EditorStateReducer = (
       })
       // 時刻順にソート
       newActions.sort((a, b) => a.at - b.at)
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'scale selected time': {
@@ -265,7 +297,7 @@ export const EditorStateReducer = (
 
       // 時刻順にソート
       newActions.sort((a, b) => a.at - b.at)
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'scale selected time from pivot': {
@@ -290,7 +322,7 @@ export const EditorStateReducer = (
 
       // 時刻順にソート
       newActions.sort((a, b) => a.at - b.at)
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
     }
 
     case 'update selected from base': {
@@ -305,7 +337,39 @@ export const EditorStateReducer = (
 
       // 時刻順にソート
       newActions.sort((a, b) => a.at - b.at)
-      return { ...state, actions: newActions }
+      return saveToHistory(state, newActions)
+    }
+
+    case 'undo': {
+      if (state.history.past.length === 0) return state
+
+      const previous = state.history.past[state.history.past.length - 1]
+      const newPast = state.history.past.slice(0, -1)
+
+      return {
+        ...state,
+        actions: previous,
+        history: {
+          past: newPast,
+          future: [state.actions, ...state.history.future],
+        },
+      }
+    }
+
+    case 'redo': {
+      if (state.history.future.length === 0) return state
+
+      const next = state.history.future[0]
+      const newFuture = state.history.future.slice(1)
+
+      return {
+        ...state,
+        actions: next,
+        history: {
+          past: [...state.history.past, state.actions],
+          future: newFuture,
+        },
+      }
     }
 
     case 'clear all':
@@ -314,6 +378,10 @@ export const EditorStateReducer = (
         actions: [],
         selectedIndices: [],
         lastSelectedIndex: null,
+        history: {
+          past: [],
+          future: [],
+        },
       }
 
     default:

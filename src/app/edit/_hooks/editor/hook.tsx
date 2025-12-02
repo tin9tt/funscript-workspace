@@ -152,6 +152,14 @@ export const useEditorContext = () => {
     [dispatch],
   )
 
+  const undo = useCallback(() => {
+    dispatch({ kind: 'undo' })
+  }, [dispatch])
+
+  const redo = useCallback(() => {
+    dispatch({ kind: 'redo' })
+  }, [dispatch])
+
   const clearAll = useCallback(() => {
     dispatch({ kind: 'clear all' })
   }, [dispatch])
@@ -177,6 +185,8 @@ export const useEditorContext = () => {
     scaleSelectedTime,
     scaleSelectedTimeFromPivot,
     updateSelectedFromBase,
+    undo,
+    redo,
     clearAll,
   }
 }

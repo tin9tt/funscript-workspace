@@ -8,19 +8,39 @@ import { useEffect, useCallback } from 'react'
  * UI を持たないため、コンポーネントではなくフックとして実装
  */
 export const useEditorGraphHandler = () => {
-  const { state, moveSelected, scaleSelected, deleteActions } =
+  const { state, moveSelected, scaleSelected, deleteActions, undo, redo } =
     useEditorContext()
 
   // キーボードによる編集操作
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      const isMac = navigator.platform.toLowerCase().includes('mac')
+      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey
+
+      // Undo: Ctrl+Z (Win) or Cmd+Z (Mac)
+      if (isCtrlOrCmd && key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
+
+      // Redo: Ctrl+Y (Win) or Cmd+Shift+Z (Mac)
+      if (
+        isMac
+          ? isCtrlOrCmd && e.shiftKey && key === 'z'
+          : isCtrlOrCmd && key === 'y'
+      ) {
+        e.preventDefault()
+        redo()
+        return
+      }
+
       // 再生中は編集操作を無効化（J/Kは作成モード）
       if (state.isPlaying) return
 
       // 選択されていない場合は何もしない
       if (state.selectedIndices.length === 0) return
-
-      const key = e.key.toLowerCase()
 
       // J/K で上下移動
       if (key === 'j') {
@@ -38,7 +58,14 @@ export const useEditorGraphHandler = () => {
         deleteActions(state.selectedIndices)
       }
     },
-    [state.isPlaying, state.selectedIndices, moveSelected, deleteActions],
+    [
+      state.isPlaying,
+      state.selectedIndices,
+      moveSelected,
+      deleteActions,
+      undo,
+      redo,
+    ],
   )
 
   // ホイールスクロールによる編集操作
