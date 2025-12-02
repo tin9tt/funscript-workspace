@@ -1,10 +1,10 @@
 'use client'
 
-import { useEditorContext } from '../_hooks/editor'
+import { usePlayback } from '../_hooks/playback'
 import { useCallback } from 'react'
 
 export const FileSelector = () => {
-  const { state, loadFile } = useEditorContext()
+  const { file, loadFile } = usePlayback()
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,9 +41,9 @@ export const FileSelector = () => {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {state.file ? (
+      {file ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium">{state.file.name}</p>
+          <p className="text-sm font-medium">{file.name}</p>
           <label className="inline-block px-4 py-2 rounded cursor-pointer">
             ファイルを変更
             <input

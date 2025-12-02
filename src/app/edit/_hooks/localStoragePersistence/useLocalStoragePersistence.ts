@@ -1,6 +1,7 @@
 'use client'
 
-import { useEditorContext } from '../editor'
+import { usePlayback } from '../playback'
+import { useActions } from '../actions'
 import { useEffect } from 'react'
 import { generateFileId } from '@/lib/utils/fileId'
 
@@ -9,13 +10,14 @@ import { generateFileId } from '@/lib/utils/fileId'
  * UI を持たないため、コンポーネントではなくフックとして実装
  */
 export const useLocalStoragePersistence = () => {
-  const { state, loadActions } = useEditorContext()
+  const { file } = usePlayback()
+  const { actions, loadActions } = useActions(null)
 
   // ファイルが変更されたら localStorage からデータを読み込む
   useEffect(() => {
-    if (!state.file) return
+    if (!file) return
 
-    const storageKey = `edit-${generateFileId(state.file)}`
+    const storageKey = `edit-${generateFileId(file)}`
     const stored = localStorage.getItem(storageKey)
 
     if (stored) {
@@ -28,15 +30,15 @@ export const useLocalStoragePersistence = () => {
         console.error('Failed to load from localStorage:', e)
       }
     }
-  }, [state.file, loadActions])
+  }, [file, loadActions])
 
   // アクションが変更されたら localStorage に保存
   useEffect(() => {
-    if (!state.file || state.actions.length === 0) return
+    if (!file || actions.length === 0) return
 
-    const storageKey = `edit-${generateFileId(state.file)}`
+    const storageKey = `edit-${generateFileId(file)}`
     const data = {
-      actions: state.actions,
+      actions: actions,
       lastModified: Date.now(),
     }
 
@@ -45,5 +47,5 @@ export const useLocalStoragePersistence = () => {
     } catch (e) {
       console.error('Failed to save to localStorage:', e)
     }
-  }, [state.file, state.actions])
+  }, [file, actions])
 }

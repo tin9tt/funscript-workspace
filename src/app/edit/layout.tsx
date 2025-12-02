@@ -1,11 +1,19 @@
 'use client'
 
-import { EditorContextProvider } from './_hooks/editor'
+import { SelectProvider } from './_hooks/select'
+import { ActionsProvider } from './_hooks/actions'
+import { PlaybackProvider } from './_hooks/playback'
 
 export default function EditLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return <EditorContextProvider>{children}</EditorContextProvider>
+  return (
+    <PlaybackProvider>
+      <ActionsProvider>
+        <SelectProvider>{children}</SelectProvider>
+      </ActionsProvider>
+    </PlaybackProvider>
+  )
 }

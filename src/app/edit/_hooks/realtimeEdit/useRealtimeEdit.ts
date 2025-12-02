@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useJobState } from './useJobState'
-import { useEditorContext } from '../editor'
+import { useActions } from '../actions'
 import { FunscriptAction } from '@/lib/funscript'
 
 interface UseRealtimeEditOptions {
@@ -12,7 +12,7 @@ export const useRealtimeEdit = ({
   isPlaying,
   currentTime,
 }: UseRealtimeEditOptions) => {
-  const { addAction: addAction_, deleteLastAction } = useEditorContext()
+  const { addAction: addAction_, deleteLastAddedAction } = useActions(null)
   const jobState = useJobState({ isPlaying, currentTime })
 
   const [prevAddedAction, setPrevAddedAction] =
@@ -54,7 +54,7 @@ export const useRealtimeEdit = ({
         if (jobState.prev === '0-0') {
           // J, K 同時押しから J 抜き → 直前の pos:0 を削除
           if (!deletedForTransition) {
-            deleteLastAction()
+            deleteLastAddedAction()
             setDeletedForTransition(true)
           }
           return
@@ -69,7 +69,7 @@ export const useRealtimeEdit = ({
         if (jobState.prev === '100-100') {
           // J, K 同時押しから K 抜き → 直前の pos:100 を削除
           if (!deletedForTransition) {
-            deleteLastAction()
+            deleteLastAddedAction()
             setDeletedForTransition(true)
           }
           return
@@ -114,7 +114,7 @@ export const useRealtimeEdit = ({
     jobState,
     currentTime,
     addAction,
-    deleteLastAction,
+    deleteLastAddedAction,
     noneProcessed,
     deletedForTransition,
   ])

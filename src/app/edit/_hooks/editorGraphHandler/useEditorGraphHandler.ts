@@ -1,6 +1,8 @@
 'use client'
 
-import { useEditorContext } from '../editor'
+import { usePlayback } from '../playback'
+import { useActions } from '../actions'
+import { useSelect } from '../select'
 import { useEffect, useCallback } from 'react'
 
 /**
@@ -8,8 +10,38 @@ import { useEffect, useCallback } from 'react'
  * UI を持たないため、コンポーネントではなくフックとして実装
  */
 export const useEditorGraphHandler = () => {
-  const { state, moveSelected, scaleSelected, deleteActions, undo, redo } =
-    useEditorContext()
+  const { isPlaying } = usePlayback()
+  const { actions, updateSelectedFromBase, deleteActions, undo, redo } =
+    useActions(null)
+  const { selectedIndices, clearSelected } = useSelect()
+
+  // 選択された点を上下移動
+  const moveSelected = useCallback(
+    (delta: number) => {
+      if (selectedIndices.length === 0) return
+      updateSelectedFromBase(selectedIndices, actions, (action) => ({
+        ...action,
+        pos: Math.max(0, Math.min(100, action.pos + delta)),
+      }))
+    },
+    [selectedIndices, actions, updateSelectedFromBase],
+  )
+
+  // 選択された点を拡大/縮小（pos: 50を基準）
+  const scaleSelected = useCallback(
+    (factor: number) => {
+      if (selectedIndices.length === 0) return
+      updateSelectedFromBase(selectedIndices, actions, (action) => {
+        const diff = action.pos - 50
+        const newPos = 50 + diff * factor
+        return {
+          ...action,
+          pos: Math.max(0, Math.min(100, newPos)),
+        }
+      })
+    },
+    [selectedIndices, actions, updateSelectedFromBase],
+  )
 
   // キーボードによる編集操作
   const handleKeyDown = useCallback(
@@ -37,10 +69,10 @@ export const useEditorGraphHandler = () => {
       }
 
       // 再生中は編集操作を無効化（J/Kは作成モード）
-      if (state.isPlaying) return
+      if (isPlaying) return
 
       // 選択されていない場合は何もしない
-      if (state.selectedIndices.length === 0) return
+      if (selectedIndices.length === 0) return
 
       // J/K で上下移動
       if (key === 'j') {
@@ -55,14 +87,16 @@ export const useEditorGraphHandler = () => {
       // Delete または Backspace で削除
       else if (key === 'delete' || key === 'backspace') {
         e.preventDefault()
-        deleteActions(state.selectedIndices)
+        deleteActions(selectedIndices)
+        clearSelected()
       }
     },
     [
-      state.isPlaying,
-      state.selectedIndices,
+      isPlaying,
+      selectedIndices,
       moveSelected,
       deleteActions,
+      clearSelected,
       undo,
       redo,
     ],
@@ -76,7 +110,7 @@ export const useEditorGraphHandler = () => {
       if (!target.closest('[data-graph-container]')) return
 
       // 選択されていない場合は何もしない
-      if (state.selectedIndices.length === 0) return
+      if (selectedIndices.length === 0) return
 
       e.preventDefault()
 
@@ -91,7 +125,7 @@ export const useEditorGraphHandler = () => {
         moveSelected(delta)
       }
     },
-    [state.selectedIndices, moveSelected, scaleSelected],
+    [selectedIndices, moveSelected, scaleSelected],
   )
 
   // イベントリスナーを登録

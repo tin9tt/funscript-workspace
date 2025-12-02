@@ -1,6 +1,6 @@
 'use client'
 
-import { useEditorContext } from './_hooks/editor'
+import { usePlayback } from './_hooks/playback'
 import { FileSelector } from './_components/FileSelector'
 import { MediaPlayer } from './_components/MediaPlayer'
 import { FunscriptGraph } from './_components/FunscriptGraph'
@@ -10,11 +10,11 @@ import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/use
 import { Controls } from './_components/Controls'
 
 export default function EditPage() {
-  const { state } = useEditorContext()
+  const { isPlaying, currentTime } = usePlayback()
 
   const { type: currentJobType } = useRealtimeEdit({
-    isPlaying: state.isPlaying,
-    currentTime: state.currentTime,
+    isPlaying,
+    currentTime,
   })
 
   // バックグラウンド処理フック

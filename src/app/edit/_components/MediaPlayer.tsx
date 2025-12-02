@@ -1,21 +1,22 @@
 'use client'
 
-import { useEditorContext } from '../_hooks/editor'
+import { usePlayback } from '../_hooks/playback'
 import { useEffect, useRef } from 'react'
 
 export const MediaPlayer = () => {
-  const { state, setCurrentTime, setPlaying } = useEditorContext()
+  const { file, isPlaying, currentTime, setCurrentTime, setPlaying } =
+    usePlayback()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  const isVideo = state.file?.type.startsWith('video')
-  const isAudio = state.file?.type.startsWith('audio')
+  const isVideo = file?.type.startsWith('video')
+  const isAudio = file?.type.startsWith('audio')
 
   // ファイルが変更されたらメディアをロード
   useEffect(() => {
-    if (!state.file) return
+    if (!file) return
 
-    const url = URL.createObjectURL(state.file)
+    const url = URL.createObjectURL(file)
 
     if (isVideo && videoRef.current) {
       videoRef.current.src = url
@@ -33,25 +34,25 @@ export const MediaPlayer = () => {
     return () => {
       URL.revokeObjectURL(url)
     }
-  }, [state.file, isVideo, isAudio, setCurrentTime, setPlaying])
+  }, [file, isVideo, isAudio, setCurrentTime, setPlaying])
 
   // 再生状態の同期
   useEffect(() => {
     const mediaElement = isVideo ? videoRef.current : audioRef.current
     if (!mediaElement) return
 
-    if (state.isPlaying) {
+    if (isPlaying) {
       mediaElement.play().catch(() => {
         setPlaying(false)
       })
     } else {
       mediaElement.pause()
     }
-  }, [state.isPlaying, isVideo, setPlaying])
+  }, [isPlaying, isVideo, setPlaying])
 
   // 高頻度で currentTime を更新 (requestAnimationFrame を使用)
   useEffect(() => {
-    if (!state.isPlaying) return
+    if (!isPlaying) return
 
     const mediaElement = isVideo ? videoRef.current : audioRef.current
     if (!mediaElement) return
@@ -68,11 +69,11 @@ export const MediaPlayer = () => {
     return () => {
       cancelAnimationFrame(animationFrameId)
     }
-  }, [state.isPlaying, isVideo, setCurrentTime])
+  }, [isPlaying, isVideo, setCurrentTime])
 
   // 時間更新のハンドリング（シーク時など）
   const handleTimeUpdate = () => {
-    if (state.isPlaying) return // 再生中は requestAnimationFrame で更新
+    if (isPlaying) return // 再生中は requestAnimationFrame で更新
 
     const mediaElement = isVideo ? videoRef.current : audioRef.current
     if (mediaElement) {
@@ -94,10 +95,10 @@ export const MediaPlayer = () => {
   }
 
   const togglePlayPause = () => {
-    setPlaying(!state.isPlaying)
+    setPlaying(!isPlaying)
   }
 
-  if (!state.file) {
+  if (!file) {
     return (
       <div className="flex items-center justify-center h-64 rounded-lg">
         <p>メディアファイルを選択してください</p>
@@ -135,11 +136,11 @@ export const MediaPlayer = () => {
             onClick={togglePlayPause}
             className="px-4 py-2 bg-primary-variant text-primary-content rounded hover:bg-primary-variant/80"
           >
-            {state.isPlaying ? '⏸ 一時停止' : '▶ 再生'}
+            {isPlaying ? '⏸ 一時停止' : '▶ 再生'}
           </button>
 
           <div className="text-sm">
-            {formatTime(state.currentTime / 1000)} / {formatTime(duration)}
+            {formatTime(currentTime / 1000)} / {formatTime(duration)}
           </div>
         </div>
 
@@ -149,7 +150,7 @@ export const MediaPlayer = () => {
           min="0"
           max={duration || 0}
           step="0.01"
-          value={state.currentTime / 1000}
+          value={currentTime / 1000}
           onChange={handleSeek}
           className="w-full"
         />
