@@ -40,6 +40,14 @@ export const FunscriptGraph = ({
     | 'range-move'
     | 'range-left'
     | 'range-right'
+    | 'range-center-left'
+    | 'range-center-right'
+    | 'pos-scale-top'
+    | 'pos-scale-bottom'
+    | 'pos-scale-center-top'
+    | 'pos-scale-center-bottom'
+    | 'single-vertical'
+    | 'single-horizontal'
     | null
   >(null)
   const [dragStartPos, setDragStartPos] = useState<{
@@ -51,6 +59,8 @@ export const FunscriptGraph = ({
   >([])
   const [dragStartIndices, setDragStartIndices] = useState<number[]>([])
   const [dragPivotTime, setDragPivotTime] = useState<number>(0)
+  const [dragPivotPos, setDragPivotPos] = useState<number>(0)
+  const [isAltKeyPressed, setIsAltKeyPressed] = useState(false)
 
   // ホバー状態の管理
   const [hoverCursor, setHoverCursor] = useState<string>('default')
@@ -324,8 +334,45 @@ export const FunscriptGraph = ({
         .sort((a, b) => a.at - b.at)
 
       if (selectedActions.length > 0) {
-        const minTime = selectedActions[0].at
-        const maxTime = selectedActions[selectedActions.length - 1].at
+        let minTime = selectedActions[0].at
+        let maxTime = selectedActions[selectedActions.length - 1].at
+
+        // 1つのポイントのみ選択されている場合、隣のポイントとの中間まで背景を拡張
+        if (selectedActions.length === 1) {
+          const selectedIndex = state.selectedIndices[0]
+          const selectedAction = selectedActions[0]
+          const prevAction =
+            selectedIndex > 0 ? state.actions[selectedIndex - 1] : null
+          const nextAction =
+            selectedIndex < state.actions.length - 1
+              ? state.actions[selectedIndex + 1]
+              : null
+
+          // 左側の境界
+          if (prevAction && prevAction.at >= startTimeMs) {
+            // 隣接点が描画範囲内にある場合は中間点
+            minTime = (prevAction.at + minTime) / 2
+          } else {
+            // 隣接点が描画範囲外または存在しない場合は16px離れた位置
+            const pixelOffset = 16
+            const timeOffset =
+              (pixelOffset / canvas.width) * (endTimeMs - startTimeMs)
+            minTime = Math.max(startTimeMs, selectedAction.at - timeOffset)
+          }
+
+          // 右側の境界
+          if (nextAction && nextAction.at <= endTimeMs) {
+            // 隣接点が描画範囲内にある場合は中間点
+            maxTime = (maxTime + nextAction.at) / 2
+          } else {
+            // 隣接点が描画範囲外または存在しない場合は16px離れた位置
+            const pixelOffset = 16
+            const timeOffset =
+              (pixelOffset / canvas.width) * (endTimeMs - startTimeMs)
+            maxTime = Math.min(endTimeMs, selectedAction.at + timeOffset)
+          }
+        }
+
         const minX = timeToX(minTime)
         const maxX = timeToX(maxTime)
 
@@ -492,17 +539,81 @@ export const FunscriptGraph = ({
 
       if (selectedActions.length === 0) return
 
-      const minTime = selectedActions[0].at
-      const maxTime = selectedActions[selectedActions.length - 1].at
+      let minTime = selectedActions[0].at
+      let maxTime = selectedActions[selectedActions.length - 1].at
+
+      // 1つのポイントのみ選択されている場合、背景範囲を拡張（描画時と同じロジック）
+      if (selectedActions.length === 1) {
+        const selectedIndex = state.selectedIndices[0]
+        const selectedAction = selectedActions[0]
+        const prevAction =
+          selectedIndex > 0 ? state.actions[selectedIndex - 1] : null
+        const nextAction =
+          selectedIndex < state.actions.length - 1
+            ? state.actions[selectedIndex + 1]
+            : null
+
+        // 左側の境界
+        if (prevAction && prevAction.at >= startTimeSec * 1000) {
+          // 隣接点が描画範囲内にある場合は中間点
+          minTime = (prevAction.at + minTime) / 2
+        } else {
+          // 隣接点が描画範囲外または存在しない場合は16px離れた位置
+          const pixelOffset = 16
+          const viewDuration = (endTimeSec - startTimeSec) * 1000
+          const timeOffset = (pixelOffset / canvas.width) * viewDuration
+          minTime = Math.max(
+            startTimeSec * 1000,
+            selectedAction.at - timeOffset,
+          )
+        }
+
+        // 右側の境界
+        if (nextAction && nextAction.at <= endTimeSec * 1000) {
+          // 隣接点が描画範囲内にある場合は中間点
+          maxTime = (maxTime + nextAction.at) / 2
+        } else {
+          // 隣接点が描画範囲外または存在しない場合は16px離れた位置
+          const pixelOffset = 16
+          const viewDuration = (endTimeSec - startTimeSec) * 1000
+          const timeOffset = (pixelOffset / canvas.width) * viewDuration
+          maxTime = Math.min(endTimeSec * 1000, selectedAction.at + timeOffset)
+        }
+      }
+
       const minX = timeToX(minTime)
       const maxX = timeToX(maxTime)
       const edgeThreshold = 10
 
+      // 選択されたポイントのpos範囲を計算
+      const selectedPositions = selectedActions.map((a) => a.pos)
+      const minPos = Math.min(...selectedPositions)
+      const maxPos = Math.max(...selectedPositions)
+      const minY = posToY(maxPos) // Y座標は反転
+      const maxY = posToY(minPos)
+
       // 選択範囲の端に近いかチェック
       const nearLeftEdge = Math.abs(canvasX - minX) < edgeThreshold
       const nearRightEdge = Math.abs(canvasX - maxX) < edgeThreshold
+
+      // 1つのポイント選択時は背景範囲内での上下端を判定、複数選択時は選択範囲の上下端を判定
+      let nearTopEdge: boolean
+      let nearBottomEdge: boolean
+      let inRangeY: boolean
+
+      if (selectedActions.length === 1) {
+        // 1つのポイント選択時: 背景範囲内（inRangeX）かつcanvas全体の上下端
+        nearTopEdge = canvasY < edgeThreshold
+        nearBottomEdge = canvasY > canvas.height - edgeThreshold
+        inRangeY = true // 背景は全体に広がっているので常にtrue
+      } else {
+        // 複数選択時: 選択範囲の上下端
+        nearTopEdge = Math.abs(canvasY - minY) < edgeThreshold
+        nearBottomEdge = Math.abs(canvasY - maxY) < edgeThreshold
+        inRangeY = canvasY >= minY && canvasY <= maxY
+      }
+
       const inRangeX = canvasX >= minX && canvasX <= maxX
-      const inRangeY = true // Y座標は制限しない
 
       // 選択されたポイントに近いかチェック
       let nearPoint = false
@@ -534,35 +645,100 @@ export const FunscriptGraph = ({
       // ドラッグモードの判定
       let mode: typeof dragMode = null
 
-      if (nearLeftEdge && selectedActions.length > 1) {
-        // 左端のドラッグ: 右端を起点に伸縮
-        mode = 'range-left'
-        setDragPivotTime(maxTime)
-      } else if (nearRightEdge && selectedActions.length > 1) {
-        // 右端のドラッグ: 左端を起点に伸縮
-        mode = 'range-right'
-        setDragPivotTime(minTime)
-      } else if (inRangeX && inRangeY && !nearPoint) {
-        // 選択範囲の背景部分: 移動
-        mode = 'range-move'
-      } else if (nearPoint) {
-        // ポイントに近い: 既存のロジック
-        // 選択されたアクションが連続しているかチェック（スケールモード用）
-        const sortedIndices = [...state.selectedIndices].sort((a, b) => a - b)
-        let isContinuous = true
-        for (let i = 0; i < sortedIndices.length - 1; i++) {
-          if (sortedIndices[i + 1] !== sortedIndices[i] + 1) {
-            isContinuous = false
-            break
+      // 単一ポイント選択時の特別な処理
+      if (selectedActions.length === 1) {
+        // 上下の端（canvas上下端）でのposスケール
+        if (nearTopEdge && inRangeX) {
+          if (e.altKey) {
+            mode = 'pos-scale-center-top'
+            setDragPivotPos(50)
+          } else {
+            mode = 'pos-scale-top'
+            setDragPivotPos(0)
+          }
+        } else if (nearBottomEdge && inRangeX) {
+          if (e.altKey) {
+            mode = 'pos-scale-center-bottom'
+            setDragPivotPos(50)
+          } else {
+            mode = 'pos-scale-bottom'
+            setDragPivotPos(100)
+          }
+        } else if (nearPoint || (inRangeX && inRangeY)) {
+          // 点の近くまたは背景内の操作
+          const selectedAction = selectedActions[0]
+          const py = posToY(selectedAction.pos)
+          const yBandThreshold = 16
+
+          if (Math.abs(canvasY - py) <= yBandThreshold) {
+            // Y軸16px以内の帯: pos移動
+            mode = 'single-vertical'
+          } else {
+            // その他の背景部分: at移動
+            mode = 'single-horizontal'
           }
         }
+      } else {
+        // 複数選択時の処理
+        // 上下の端のドラッグ: posスケール
+        if (nearTopEdge && inRangeX) {
+          if (e.altKey) {
+            mode = 'pos-scale-center-top'
+            setDragPivotPos(50)
+          } else {
+            mode = 'pos-scale-top'
+            setDragPivotPos(minPos)
+          }
+        } else if (nearBottomEdge && inRangeX) {
+          if (e.altKey) {
+            mode = 'pos-scale-center-bottom'
+            setDragPivotPos(50)
+          } else {
+            mode = 'pos-scale-bottom'
+            setDragPivotPos(maxPos)
+          }
+        } else if (nearLeftEdge) {
+          // 左端のドラッグ: 右端または中心を起点に伸縮
+          if (e.altKey) {
+            mode = 'range-center-left'
+            const centerTime = (minTime + maxTime) / 2
+            setDragPivotTime(centerTime)
+          } else {
+            mode = 'range-left'
+            setDragPivotTime(maxTime)
+          }
+        } else if (nearRightEdge) {
+          // 右端のドラッグ: 左端または中心を起点に伸縮
+          if (e.altKey) {
+            mode = 'range-center-right'
+            const centerTime = (minTime + maxTime) / 2
+            setDragPivotTime(centerTime)
+          } else {
+            mode = 'range-right'
+            setDragPivotTime(minTime)
+          }
+        } else if (inRangeX && inRangeY && !nearPoint) {
+          // 選択範囲の背景部分: 移動
+          mode = 'range-move'
+        } else if (nearPoint) {
+          // ポイントに近い: 複数選択時のドラッグ
+          // 選択されたアクションが連続しているかチェック（スケールモード用）
+          const sortedIndices = [...state.selectedIndices].sort((a, b) => a - b)
+          let isContinuous = true
+          for (let i = 0; i < sortedIndices.length - 1; i++) {
+            if (sortedIndices[i + 1] !== sortedIndices[i] + 1) {
+              isContinuous = false
+              break
+            }
+          }
 
-        if (e.shiftKey && isContinuous && sortedIndices.length > 1) {
-          mode = 'scale'
-        } else if (nearHorizontal) {
-          mode = 'horizontal'
-        } else {
-          mode = 'vertical'
+          if (e.shiftKey && isContinuous && sortedIndices.length > 1) {
+            mode = 'scale'
+          } else if (nearHorizontal) {
+            mode = 'horizontal'
+          } else {
+            mode = 'vertical'
+          }
         }
       }
 
@@ -624,15 +800,75 @@ export const FunscriptGraph = ({
           return
         }
 
-        const minTime = selectedActions[0].at
-        const maxTime = selectedActions[selectedActions.length - 1].at
+        let minTime = selectedActions[0].at
+        let maxTime = selectedActions[selectedActions.length - 1].at
+
+        // 1つのポイントのみ選択されている場合、背景範囲を拡張（ドラッグ判定時と同じロジック）
+        if (selectedActions.length === 1) {
+          const selectedIndex = state.selectedIndices[0]
+          const selectedAction = selectedActions[0]
+          const prevAction =
+            selectedIndex > 0 ? state.actions[selectedIndex - 1] : null
+          const nextAction =
+            selectedIndex < state.actions.length - 1
+              ? state.actions[selectedIndex + 1]
+              : null
+
+          const startTimeMs = startTimeSec * 1000
+          const endTimeMs = endTimeSec * 1000
+          const viewDuration = endTimeMs - startTimeMs
+
+          // 左側の境界
+          if (prevAction && prevAction.at >= startTimeMs) {
+            minTime = (prevAction.at + minTime) / 2
+          } else {
+            const pixelOffset = 16
+            const timeOffset = (pixelOffset / canvas.width) * viewDuration
+            minTime = Math.max(startTimeMs, selectedAction.at - timeOffset)
+          }
+
+          // 右側の境界
+          if (nextAction && nextAction.at <= endTimeMs) {
+            maxTime = (maxTime + nextAction.at) / 2
+          } else {
+            const pixelOffset = 16
+            const timeOffset = (pixelOffset / canvas.width) * viewDuration
+            maxTime = Math.min(endTimeMs, selectedAction.at + timeOffset)
+          }
+        }
+
         const minX = timeToX(minTime)
         const maxX = timeToX(maxTime)
         const edgeThreshold = 10
 
+        // 選択されたポイントのpos範囲を計算
+        const selectedPositions = selectedActions.map((a) => a.pos)
+        const minPos = Math.min(...selectedPositions)
+        const maxPos = Math.max(...selectedPositions)
+        const minY = posToY(maxPos) // Y座標は反転
+        const maxY = posToY(minPos)
+
         // 選択範囲の端に近いかチェック
         const nearLeftEdge = Math.abs(canvasX - minX) < edgeThreshold
         const nearRightEdge = Math.abs(canvasX - maxX) < edgeThreshold
+
+        // 1つのポイント選択時は背景範囲内での上下端を判定、複数選択時は選択範囲の上下端を判定
+        let nearTopEdge: boolean
+        let nearBottomEdge: boolean
+        let inRangeY: boolean
+
+        if (selectedActions.length === 1) {
+          // 1つのポイント選択時: 背景範囲内かつcanvas全体の上下端
+          nearTopEdge = canvasY < edgeThreshold
+          nearBottomEdge = canvasY > canvas.height - edgeThreshold
+          inRangeY = true
+        } else {
+          // 複数選択時: 選択範囲の上下端
+          nearTopEdge = Math.abs(canvasY - minY) < edgeThreshold
+          nearBottomEdge = Math.abs(canvasY - maxY) < edgeThreshold
+          inRangeY = canvasY >= minY && canvasY <= maxY
+        }
+
         const inRangeX = canvasX >= minX && canvasX <= maxX
 
         // ポイントに近いかチェック
@@ -656,13 +892,28 @@ export const FunscriptGraph = ({
         }
 
         // カーソルの種類を決定
-        if (nearLeftEdge && selectedActions.length > 1) {
+        if (nearTopEdge && inRangeX) {
+          setHoverCursor('ns-resize')
+        } else if (nearBottomEdge && inRangeX) {
+          setHoverCursor('ns-resize')
+        } else if (nearLeftEdge && selectedActions.length > 1) {
           setHoverCursor('col-resize')
         } else if (nearRightEdge && selectedActions.length > 1) {
           setHoverCursor('col-resize')
-        } else if (inRangeX && !nearPoint) {
+        } else if (inRangeX && inRangeY && selectedActions.length === 1) {
+          // 1つのポイント選択時のホバー判定（nearPointに関係なく背景操作）
+          const selectedAction = selectedActions[0]
+          const py = posToY(selectedAction.pos)
+          const yBandThreshold = 16
+
+          if (Math.abs(canvasY - py) <= yBandThreshold) {
+            setHoverCursor('ns-resize')
+          } else {
+            setHoverCursor('ew-resize')
+          }
+        } else if (inRangeX && inRangeY && !nearPoint) {
           setHoverCursor('move')
-        } else if (nearPoint) {
+        } else if (nearPoint && selectedActions.length > 1) {
           setHoverCursor('pointer')
         } else {
           setHoverCursor('default')
@@ -757,7 +1008,12 @@ export const FunscriptGraph = ({
             at: Math.max(0, action.at + deltaTime),
           }),
         )
-      } else if (dragMode === 'range-left' || dragMode === 'range-right') {
+      } else if (
+        dragMode === 'range-left' ||
+        dragMode === 'range-right' ||
+        dragMode === 'range-center-left' ||
+        dragMode === 'range-center-right'
+      ) {
         // 選択範囲の端を伸縮 - 開始時の状態から計算
         if (dragStartActions.length > 0 && dragStartIndices.length > 0) {
           const selectedStartActions = dragStartIndices
@@ -766,12 +1022,28 @@ export const FunscriptGraph = ({
             .sort((a, b) => a.action.at - b.action.at)
 
           if (selectedStartActions.length > 1) {
-            const baseTime = dragPivotTime
-            const movingTime =
-              dragMode === 'range-left'
-                ? selectedStartActions[0].action.at
-                : selectedStartActions[selectedStartActions.length - 1].action
-                    .at
+            // ドラッグ中のAltキー状態を考慮
+            const isCenterBased =
+              isAltKeyPressed ||
+              dragMode === 'range-center-left' ||
+              dragMode === 'range-center-right'
+            const isLeft =
+              dragMode === 'range-left' || dragMode === 'range-center-left'
+
+            // 基点を決定
+            let baseTime: number
+            if (isCenterBased) {
+              const minTime = selectedStartActions[0].action.at
+              const maxTime =
+                selectedStartActions[selectedStartActions.length - 1].action.at
+              baseTime = (minTime + maxTime) / 2
+            } else {
+              baseTime = dragPivotTime
+            }
+
+            const movingTime = isLeft
+              ? selectedStartActions[0].action.at
+              : selectedStartActions[selectedStartActions.length - 1].action.at
 
             const originalRange = Math.abs(movingTime - baseTime)
             const deltaTime = (dx / canvas.width) * viewDuration
@@ -796,6 +1068,107 @@ export const FunscriptGraph = ({
             )
           }
         }
+      } else if (
+        dragMode === 'pos-scale-top' ||
+        dragMode === 'pos-scale-bottom' ||
+        dragMode === 'pos-scale-center-top' ||
+        dragMode === 'pos-scale-center-bottom'
+      ) {
+        // pos のスケール
+        // ドラッグ中のAltキー状態を考慮
+        const isCenterBased =
+          isAltKeyPressed ||
+          dragMode === 'pos-scale-center-top' ||
+          dragMode === 'pos-scale-center-bottom'
+        const isTop =
+          dragMode === 'pos-scale-top' || dragMode === 'pos-scale-center-top'
+
+        // 開始時の選択範囲のpos情報を取得
+        const selectedStartActions = dragStartIndices
+          .map((i) => dragStartActions[i])
+          .filter((a) => a !== undefined)
+
+        if (selectedStartActions.length > 0) {
+          // 1つのポイント選択時はスケール処理（0または100を基点に）
+          if (selectedStartActions.length === 1) {
+            const deltaPos = -(dy / canvas.height) * 100
+            const pivotPos = isCenterBased ? 50 : dragPivotPos
+            const startPos = selectedStartActions[0].pos
+
+            const originalRange = Math.abs(startPos - pivotPos)
+            const newMovingPos = startPos + deltaPos
+            const newRange = Math.abs(newMovingPos - pivotPos)
+
+            const factor = originalRange > 0 ? newRange / originalRange : 1
+            const clampedFactor = Math.max(0.1, factor)
+
+            updateSelectedFromBase(
+              dragStartIndices,
+              dragStartActions,
+              (action) => {
+                const posDiff = action.pos - pivotPos
+                const newPos = pivotPos + posDiff * clampedFactor
+                return {
+                  ...action,
+                  pos: Math.max(0, Math.min(100, newPos)),
+                }
+              },
+            )
+          } else {
+            // 複数選択時はスケール処理
+            const startPositions = selectedStartActions.map((a) => a.pos)
+            const startMinPos = Math.min(...startPositions)
+            const startMaxPos = Math.max(...startPositions)
+
+            // ドラッグ量からスケール係数を計算
+            const deltaPos = -(dy / canvas.height) * 100
+            const pivotPos = isCenterBased ? 50 : dragPivotPos
+
+            // 移動している端の元の位置
+            const movingPos = isTop ? startMaxPos : startMinPos
+            const originalRange = Math.abs(movingPos - pivotPos)
+            const newMovingPos = movingPos + deltaPos
+            const newRange = Math.abs(newMovingPos - pivotPos)
+
+            const factor = originalRange > 0 ? newRange / originalRange : 1
+            const clampedFactor = Math.max(0.1, factor)
+
+            updateSelectedFromBase(
+              dragStartIndices,
+              dragStartActions,
+              (action) => {
+                const posDiff = action.pos - pivotPos
+                const newPos = pivotPos + posDiff * clampedFactor
+                return {
+                  ...action,
+                  pos: Math.max(0, Math.min(100, newPos)),
+                }
+              },
+            )
+          }
+        }
+      } else if (dragMode === 'single-vertical') {
+        // 1つのポイント選択時のpos移動
+        const deltaPos = -(dy / canvas.height) * 100
+        updateSelectedFromBase(
+          dragStartIndices,
+          dragStartActions,
+          (action) => ({
+            ...action,
+            pos: Math.max(0, Math.min(100, action.pos + deltaPos)),
+          }),
+        )
+      } else if (dragMode === 'single-horizontal') {
+        // 1つのポイント選択時のat移動
+        const deltaTime = (dx / canvas.width) * viewDuration
+        updateSelectedFromBase(
+          dragStartIndices,
+          dragStartActions,
+          (action) => ({
+            ...action,
+            at: Math.max(0, action.at + deltaTime),
+          }),
+        )
       }
     },
     [
@@ -804,6 +1177,8 @@ export const FunscriptGraph = ({
       dragStartPos,
       dragMode,
       dragPivotTime,
+      dragPivotPos,
+      isAltKeyPressed,
       dragStartActions,
       dragStartIndices,
       state.currentTime,
@@ -822,6 +1197,8 @@ export const FunscriptGraph = ({
       setDragStartActions([])
       setDragStartIndices([])
       setDragPivotTime(0)
+      setDragPivotPos(0)
+      setIsAltKeyPressed(false) // Altキー状態もリセット
       // hasDraggedはhandleClickでリセットされるのでここではリセットしない
     }
   }, [isDragging])
@@ -838,6 +1215,34 @@ export const FunscriptGraph = ({
       }
     }
   }, [isDragging, handleMouseUp])
+
+  // ドラッグ中のAltキー状態を監視
+  useEffect(() => {
+    if (isDragging) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Alt') {
+          setIsAltKeyPressed(true)
+        }
+      }
+      const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.key === 'Alt') {
+          setIsAltKeyPressed(false)
+        }
+      }
+      // ドラッグ開始時の状態をリセット
+      setIsAltKeyPressed(false)
+
+      window.addEventListener('keydown', handleKeyDown)
+      window.addEventListener('keyup', handleKeyUp)
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown)
+        window.removeEventListener('keyup', handleKeyUp)
+      }
+    } else {
+      // ドラッグ終了時もリセット
+      setIsAltKeyPressed(false)
+    }
+  }, [isDragging])
 
   return (
     <div
@@ -865,15 +1270,23 @@ export const FunscriptGraph = ({
           background: 'transparent',
           zIndex: 10,
           cursor: isDragging
-            ? dragMode === 'horizontal'
+            ? dragMode === 'horizontal' || dragMode === 'single-horizontal'
               ? 'ew-resize'
-              : dragMode === 'vertical'
+              : dragMode === 'vertical' || dragMode === 'single-vertical'
                 ? 'ns-resize'
                 : dragMode === 'range-move'
                   ? 'move'
-                  : dragMode === 'range-left' || dragMode === 'range-right'
+                  : dragMode === 'range-left' ||
+                      dragMode === 'range-right' ||
+                      dragMode === 'range-center-left' ||
+                      dragMode === 'range-center-right'
                     ? 'col-resize'
-                    : 'move'
+                    : dragMode === 'pos-scale-top' ||
+                        dragMode === 'pos-scale-bottom' ||
+                        dragMode === 'pos-scale-center-top' ||
+                        dragMode === 'pos-scale-center-bottom'
+                      ? 'ns-resize'
+                      : 'move'
             : hoverCursor,
         }}
       />
