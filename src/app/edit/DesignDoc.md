@@ -173,17 +173,17 @@ graph TB
         B[useEdit]
         C[useGUIEdit]
         D[useGUIEditInputHandle]
-        E[useEditorGraphHandler]
+        E[useGUIEditKeyboardHandle]
 
         A -->|統合Hook| B
-        B -->|Canvas操作| C
-        C -->|イベント処理| D
-        E -->|キーボード/ホイール| Window
+        B -->|Canvas操作・統合| C
+        C -->|マウス操作| D
+        C -->|キーボード/ホイール| E
 
         B -.->|file, isPlaying<br/>currentTime| PlaybackContext
         B -.->|actions, undo, redo<br/>updateSelectedFromBase| ActionsContext
         B -.->|selectedIndices<br/>setSelected, etc| SelectContext
-        E -.->|全Context参照| Contexts
+        E -.->|isPlaying, undo, redo<br/>deleteActions| Contexts
     end
 
     style A fill:#e1f5ff
@@ -223,6 +223,31 @@ graph TB
 - **Ctrl+Z / Cmd+Z**: 元に戻す
 - **Ctrl+Y / Cmd+Shift+Z**: やり直し
 - 履歴スタックで全ての編集操作を管理
+
+##### **一時編集バッファ（tmpActions）**
+
+停止中の編集操作では、履歴の肥大化を防ぐため、一時編集バッファ（tmpActions）を使用。
+
+**動作:**
+
+1. 編集開始時（マウスドラッグ、J/K押下、ホイールスクロール開始）に、現在のactionsをtmpActionsにコピー
+2. 編集中はtmpActionsに対して変更を適用（視覚的には即座に反映）
+3. 編集終了後300ms間、新しい編集操作がなければ、tmpActionsを正式にコミット
+4. コミット時に履歴スタックに1エントリのみ追加
+
+**効果:**
+
+- ドラッグ中のmousemove、連続したJ/Kキー入力、連続したホイールスクロールでも履歴は1つだけ
+- 視覚的なフィードバックは即座に得られる（effectiveActionsパターン）
+- Undo/Redoの使い勝手が向上
+
+**実装詳細:**
+
+- `useGUIEdit` 内で `isEditing`, `tmpActions`, `baseActions`, `baseIndices` を状態管理
+- `tmpActionsRef` で最新の値をrefで保持（コミット時の正確性のため）
+- `wrappedUpdateSelectedFromBase` が全ての編集操作を傍受してtmpActionsを更新
+- `scheduleCommit` でタイマー管理（300ms遅延）
+- `effectiveActions = isEditing ? tmpActions : actions` で表示切り替え
 
 ### 3. データ構造
 
@@ -625,43 +650,31 @@ useRealtimeEdit({ isPlaying, currentTime })
 ```mermaid
 graph TB
     subgraph "バックグラウンド処理Hook"
-        A[useEditorGraphHandler]
-        B[useLocalStoragePersistence]
-        C[useRealtimeEdit]
+        A[useLocalStoragePersistence]
+        B[useRealtimeEdit]
 
-        A -->|キーボード/ホイール| WindowEvents[Window Events]
-        A -->|isPlaying| usePlayback
-        A -->|actions, undo, redo<br/>updateSelectedFromBase| useActions
-        A -->|selectedIndices<br/>clearSelected| useSelect
+        A -->|file| usePlayback
+        A -->|actions, loadActions| useActions
+        A -.->|読み書き| localStorage
 
-        B -->|file| usePlayback
-        B -->|actions, loadActions| useActions
-        B -.->|読み書き| localStorage
-
-        C -->|詳細は上記参照| RealtimeHooks[3層アーキテクチャ]
+        B -->|詳細は上記参照| RealtimeHooks[3層アーキテクチャ]
     end
 
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#ffe1e1
+    style A fill:#fff4e1
+    style B fill:#ffe1e1
 ```
 
-##### **1. useEditorGraphHandler**
-
-- キーボードとホイールイベントのグローバルリスナー
-- 選択中の点の移動・拡大縮小処理
-- Undo/Redo (Ctrl+Z / Ctrl+Y)
-- Delete/Backspace による削除（削除後に選択状態をクリア）
-
-##### **2. useLocalStoragePersistence**
+##### **1. useLocalStoragePersistence**
 
 - ファイル変更時にlocalStorageから自動読み込み
 - アクション変更時に自動保存
 - ファイルごとに一意のキーで管理
 
-##### **3. useRealtimeEdit**
+##### **2. useRealtimeEdit**
 
 - 再生中のキーボード入力でリアルタイムにアクション作成
+
+**注:** 以前は `useEditorGraphHandler` が存在していたが、停止中のキーボード/ホイール編集機能は `useGUIEditKeyboardHandle` に統合され、`useGUIEdit` の中から呼び出されるようになった。これにより、マウス操作とキーボード/ホイール操作で同じtmpActionsバッファを共有し、統一的な編集体験を提供。
 
 ##### **GUI編集Hook:**
 
@@ -670,30 +683,84 @@ graph TB
     subgraph "GUI編集のフック構造"
         A[useGUIEdit]
         B[useGUIEditInputHandle]
+        C[useGUIEditKeyboardHandle]
 
-        A -->|イベントハンドラ生成| B
-        A -->|canvasRef| CanvasElement[Canvas Element]
+        A -->|マウスイベント生成| B
+        A -->|キーボード/ホイール| C
+        A -->|tmpActions管理| TmpBuffer[一時編集バッファ]
 
         B -->|座標変換| CoordTransform[画面座標 ↔ データ座標]
-        B -->|ドラッグモード管理| DragMode[選択/移動/ブラシ]
+        B -->|ドラッグモード管理| DragMode[水平/垂直/スケール等]
 
-        A -.->|playback, actions, select| Contexts
-        B -->|onClick| SelectContext
-        B -->|onDrag| ActionsContext
+        C -->|J/K移動| MoveOps[上下移動]
+        C -->|ホイール| WheelOps[移動/スケール]
+        C -->|Undo/Redo/Delete| ActionOps[履歴・削除操作]
+
+        A -.->|wrappedUpdateSelectedFromBase| UpdateWrapper[統一編集インターフェース]
+        UpdateWrapper -->|scheduleCommit| CommitTimer[300ms遅延コミット]
+
+        A -.->|effectiveActions| Display[isEditing ? tmpActions : actions]
     end
 
     style A fill:#e1f5ff
     style B fill:#fff4e1
-    style CoordTransform fill:#ffe1e1
-    style DragMode fill:#e1ffe1
+    style C fill:#ffe1e1
+    style TmpBuffer fill:#f0e1ff
+    style UpdateWrapper fill:#e1ffe1
 ```
 
-###### **useGUIEdit / useGUIEditInputHandle**
+###### **useGUIEdit**
 
-- Canvas上のマウスイベント処理
+停止中の編集操作（マウス・キーボード・ホイール）を統合管理する中核Hook。
+
+**責務:**
+
+- 一時編集バッファ（tmpActions）の管理
+- `wrappedUpdateSelectedFromBase`: 全ての編集操作を傍受し、tmpActionsに適用
+- `scheduleCommit`: 編集終了後300ms遅延でコミット
+- `effectiveActions`: 表示用のアクション配列を返す（編集中はtmpActions、それ以外はactions）
+- `useGUIEditInputHandle` と `useGUIEditKeyboardHandle` の統合
+
+**実装ポイント:**
+
+- `tmpActionsRef`: 最新のtmpActionsをrefで保持（コミット時のクロージャ問題を回避）
+- `baseActionsRef`, `baseIndicesRef`: 編集開始時の状態を保持
+- `commitTimerRef`: タイマーIDをrefで管理（コールバックの安定性のため）
+- `wrappedUpdateSelectedFromBase`: 依存配列は `[isEditing, tmpActions, scheduleCommit]`
+  - 初回編集時に `isEditing = true`, `baseActions/baseIndices` を保存
+  - 編集中は常に `baseActions[index]` を元に `updateFn` を適用（累積誤差防止）
+  - 更新後の `newActions` を `tmpActions` と `tmpActionsRef` に反映
+
+###### **useGUIEditInputHandle**
+
+Canvas上のマウスイベント処理。
+
+**責務:**
+
 - クリック・ドラッグによる選択と編集
 - 座標変換（画面座標 ↔ データ座標）
-- ドラッグモード管理（選択/移動/ブラシ等）
+- ドラッグモード管理:
+  - 単一選択: `single-horizontal`, `single-vertical`
+  - 複数選択: `horizontal`, `vertical`, `scale`, `range-move`, `range-left/right`, `pos-scale-top/bottom`
+- ホバーカーソル管理
+
+###### **useGUIEditKeyboardHandle**
+
+キーボードとホイールによる編集操作。
+
+**責務:**
+
+- J/Kキーによる上下移動（通常5単位、Alt押下時1単位）
+- ホイールスクロールによる移動・拡大縮小（Alt押下時）
+- Undo/Redo（Ctrl+Z / Ctrl+Y）
+- Delete/Backspace（削除後に選択状態をクリア）
+- Windowレベルのイベントリスナー管理
+
+**統合ポイント:**
+
+- `useGUIEdit` から `wrappedUpdateSelectedFromBase` を受け取る
+- マウス操作と同じtmpActionsバッファを共有
+- 編集操作はすべて同じ遅延コミット機構を使用
 
 #### 7.3 パフォーマンス最適化
 
