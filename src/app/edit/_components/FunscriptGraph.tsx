@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react'
 import { type JobStateType } from '../_hooks/realtimeEdit/useJobState'
 import { useEdit } from '../_hooks/edit'
 import WaveSurfer from 'wavesurfer.js'
+import { calculateSpeed, isSpeedInRange } from '@/lib/funscript'
 
 const VIEWPORT_TIME_RANGE = 10 // 再生時刻の前後10秒を表示
 
@@ -262,24 +263,48 @@ export const FunscriptGraph = ({
       }
     }
 
-    // アクション線を描画
+    // アクション線を描画（速度に基づいて色を変更）
     if (drawingActions.length > 0) {
-      ctx.strokeStyle = '#6366f1'
       ctx.lineWidth = 2
-      ctx.beginPath()
-      let isFirstPoint = true
-      drawingActions.forEach(({ action }) => {
-        const x = timeToX(action.at)
-        const y = posToY(action.pos)
 
-        if (isFirstPoint) {
-          ctx.moveTo(x, y)
-          isFirstPoint = false
+      // 各セグメントごとに速度を計算して色を決定
+      for (let i = 0; i < drawingActions.length - 1; i++) {
+        const current = drawingActions[i].action
+        const next = drawingActions[i + 1].action
+
+        // 実際のアクション配列でのインデックスを取得
+        const currentIndex = drawingActions[i].index
+        const nextIndex = drawingActions[i + 1].index
+
+        // 両方とも実際のアクション（index >= 0）で、かつ連続している場合のみ速度を計算
+        if (
+          currentIndex >= 0 &&
+          nextIndex >= 0 &&
+          nextIndex === currentIndex + 1
+        ) {
+          const duration = next.at - current.at
+          const distance = Math.abs(next.pos - current.pos)
+          const speed = calculateSpeed(duration, distance)
+          const inRange = isSpeedInRange(speed)
+
+          // 速度に基づいて色を設定
+          ctx.strokeStyle = inRange ? '#6366f1' : '#ef4444'
         } else {
-          ctx.lineTo(x, y)
+          // 仮の点が含まれる場合や連続していない場合は通常の色
+          ctx.strokeStyle = '#6366f1'
         }
-      })
-      ctx.stroke()
+
+        // 線を描画
+        const x1 = timeToX(current.at)
+        const y1 = posToY(current.pos)
+        const x2 = timeToX(next.at)
+        const y2 = posToY(next.pos)
+
+        ctx.beginPath()
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y2)
+        ctx.stroke()
+      }
     }
 
     // 選択範囲の背景を描画

@@ -118,3 +118,51 @@ const sortAndClampFunscriptActions = (
       ...a,
       pos: Math.min(100, Math.max(0, a.pos)),
     }))
+
+/**
+ * アクション間の速度を計算
+ * @param duration アクション間の時間差（ミリ秒）
+ * @param distance アクション間の位置差（0-100の範囲）
+ * @returns 速度
+ */
+export const calculateSpeed = (duration: number, distance: number): number => {
+  if (distance === 0) {
+    return 0
+  }
+  if (duration <= 0) {
+    return Infinity
+  }
+  return 25000 * Math.pow((duration * 90) / distance, -1.05)
+}
+
+/**
+ * 速度が有効範囲内かどうかをチェック
+ * @param speed 速度
+ * @returns 速度が 5～80 の範囲内の場合 true
+ */
+export const isSpeedInRange = (speed: number): boolean => {
+  return speed === 0 || (speed >= 5 && speed <= 80)
+}
+
+/**
+ * アクション配列から速度が範囲外のセグメントを検出
+ * @param actions アクション配列（ソート済みであること）
+ * @returns 速度が範囲外のセグメントのインデックス配列（各セグメントは前のアクションのインデックス）
+ */
+export const findOutOfRangeSpeedSegments = (
+  actions: FunscriptAction[],
+): number[] => {
+  const outOfRangeIndices: number[] = []
+  for (let i = 0; i < actions.length - 1; i++) {
+    const current = actions[i]
+    const next = actions[i + 1]
+    const duration = next.at - current.at
+    const distance = Math.abs(next.pos - current.pos)
+    const speed = calculateSpeed(duration, distance)
+    if (!isSpeedInRange(speed)) {
+      outOfRangeIndices.push(i)
+      console.log(i, speed, duration, distance)
+    }
+  }
+  return outOfRangeIndices
+}

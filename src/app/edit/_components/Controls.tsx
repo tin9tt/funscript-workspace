@@ -4,7 +4,11 @@ import { usePlayback } from '../_hooks/playback'
 import { useActions } from '../_hooks/actions'
 import { useSelect } from '../_hooks/select'
 import { useCallback } from 'react'
-import { sanitizeFunscript, Funscript } from '@/lib/funscript'
+import {
+  sanitizeFunscript,
+  Funscript,
+  findOutOfRangeSpeedSegments,
+} from '@/lib/funscript'
 
 export const Controls = () => {
   const { file } = usePlayback()
@@ -25,6 +29,15 @@ export const Controls = () => {
 
     // 検証と正規化
     const sanitized = sanitizeFunscript(funscript)
+
+    // 速度が範囲外のセグメントをチェック
+    const outOfRangeIndices = findOutOfRangeSpeedSegments(sanitized.actions)
+    if (outOfRangeIndices.length > 0) {
+      const count = outOfRangeIndices.length
+      alert(
+        `速度が範囲外（20～80）のセグメントが${count}個検出されました。\nエクスポートを続行しますか？`,
+      )
+    }
 
     // JSON に変換
     const json = JSON.stringify(sanitized, null, 2)
