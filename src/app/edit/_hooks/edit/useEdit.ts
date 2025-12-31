@@ -39,6 +39,23 @@ export const useEdit = ({ canvasRef }: UseEditParams) => {
 
   const actionsHook = useActions(playback.file, savePersistent)
 
+  const equalizeSelectedRange = useCallback(() => {
+    const indices = [...select.selectedIndices].sort((a, b) => a - b)
+    if (indices.length < 2) return false
+
+    const isContinuous = indices.every(
+      (index, i) => i === 0 || index === indices[i - 1] + 1,
+    )
+
+    if (!isContinuous) return false
+
+    const startIndex = indices[0]
+    const endIndex = indices[indices.length - 1]
+
+    actionsHook.equalizeIntervals(startIndex, endIndex)
+    return true
+  }, [select.selectedIndices, actionsHook.equalizeIntervals])
+
   // localStorage からデータを読み込む
   useEffect(() => {
     if (!playback.file) return
@@ -77,6 +94,7 @@ export const useEdit = ({ canvasRef }: UseEditParams) => {
     ...select,
     // Actions
     ...actionsHook,
+    equalizeSelectedRange,
     // Playback
     ...playback,
     // GUI Edit

@@ -68,6 +68,13 @@ export const useActions = (
     [dispatch],
   )
 
+  const equalizeIntervals = useCallback(
+    (startIndex: number, endIndex: number) => {
+      dispatch({ kind: 'equalize-range', payload: { startIndex, endIndex } })
+    },
+    [dispatch],
+  )
+
   // Persist actions to storage when they change
   useEffect(() => {
     if (_savePersistent && file && state.actions.length > 0) {
@@ -87,5 +94,6 @@ export const useActions = (
     undo,
     redo,
     updateSelectedFromBase,
+    equalizeIntervals,
   }
 }

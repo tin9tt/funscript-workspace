@@ -21,6 +21,10 @@ export type ActionsAction =
   | { kind: 'undo' }
   | { kind: 'redo' }
   | {
+      kind: 'equalize-range'
+      payload: { startIndex: number; endIndex: number }
+    }
+  | {
       kind: 'update-selected'
       payload: {
         indices: number[]
@@ -46,6 +50,39 @@ const saveToHistory = (
       future: [],
     },
   }
+}
+
+const equalizeIntervalsInRange = (
+  actions: FunscriptAction[],
+  startIndex: number,
+  endIndex: number,
+): FunscriptAction[] | null => {
+  if (startIndex < 0 || endIndex >= actions.length || startIndex >= endIndex) {
+    return null
+  }
+
+  const startAt = actions[startIndex].at
+  const endAt = actions[endIndex].at
+  const span = endAt - startAt
+
+  if (span <= 0) return null
+
+  const count = endIndex - startIndex
+  const step = span / count
+  const newActions = [...actions]
+
+  for (let i = 1; i < count; i += 1) {
+    const targetIndex = startIndex + i
+    const baseAction = newActions[targetIndex]
+    if (!baseAction) continue
+
+    newActions[targetIndex] = {
+      ...baseAction,
+      at: Math.round(startAt + step * i),
+    }
+  }
+
+  return newActions
 }
 
 const actionsReducer = (
@@ -114,6 +151,19 @@ const actionsReducer = (
           future: newFuture,
         },
       }
+    }
+
+    case 'equalize-range': {
+      const newActions = equalizeIntervalsInRange(
+        state.actions,
+        action.payload.startIndex,
+        action.payload.endIndex,
+      )
+
+      if (!newActions) return state
+
+      newActions.sort((a, b) => a.at - b.at)
+      return saveToHistory(state, newActions)
     }
 
     case 'update-selected': {

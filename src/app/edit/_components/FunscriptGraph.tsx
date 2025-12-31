@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { type JobStateType } from '../_hooks/realtimeEdit/useJobState'
 import { useEdit } from '../_hooks/edit'
 import WaveSurfer from 'wavesurfer.js'
@@ -23,6 +23,26 @@ export const FunscriptGraph = ({
 
   const [peaks, setPeaks] = useState<(number[] | Float32Array)[] | null>(null)
   const [duration, setDuration] = useState<number>(0)
+
+  const canEqualize = useMemo(() => {
+    const indices = [...edit.selectedIndices].sort((a, b) => a - b)
+    if (indices.length < 2) return false
+
+    const continuous = indices.every(
+      (index, i) => i === 0 || index === indices[i - 1] + 1,
+    )
+
+    const withinBounds =
+      indices[0] >= 0 &&
+      indices[indices.length - 1] < edit.effectiveActions.length
+
+    return continuous && withinBounds
+  }, [edit.selectedIndices, edit.effectiveActions.length])
+
+  const handleEqualize = useCallback(() => {
+    if (!canEqualize) return
+    edit.equalizeSelectedRange()
+  }, [canEqualize, edit])
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
@@ -403,59 +423,72 @@ export const FunscriptGraph = ({
   ])
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-64 rounded-lg relative bg-white overflow-hidden"
-    >
-      {/* 波形表示用のCanvas */}
-      <canvas
-        ref={waveformCanvasRef}
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          zIndex: 0,
-        }}
-      />
-
-      {/* グラフ描画用のCanvas */}
-      <canvas
-        ref={canvasRef}
-        onMouseDown={edit.onMouseDown}
-        onMouseMove={edit.onMouseMove}
-        onMouseUp={edit.onMouseUp}
-        onClick={edit.onClick}
-        className="absolute inset-0"
-        style={{
-          background: 'transparent',
-          zIndex: 10,
-          cursor: edit.isDragging
-            ? edit.dragMode === 'horizontal' ||
-              edit.dragMode === 'single-horizontal'
-              ? 'ew-resize'
-              : edit.dragMode === 'vertical' ||
-                  edit.dragMode === 'single-vertical'
-                ? 'ns-resize'
-                : edit.dragMode === 'range-move'
-                  ? 'move'
-                  : edit.dragMode === 'range-left' ||
-                      edit.dragMode === 'range-right' ||
-                      edit.dragMode === 'range-center-left' ||
-                      edit.dragMode === 'range-center-right'
-                    ? 'col-resize'
-                    : edit.dragMode === 'pos-scale-top' ||
-                        edit.dragMode === 'pos-scale-bottom' ||
-                        edit.dragMode === 'pos-scale-center-top' ||
-                        edit.dragMode === 'pos-scale-center-bottom'
-                      ? 'ns-resize'
-                      : 'move'
-            : edit.hoverCursor,
-        }}
-      />
-
-      {/* 現在位置インジケーター（コンテナ中央に固定） */}
+    <div className="space-y-2">
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-blue-500 pointer-events-none z-20"
-        style={{ left: '50%', transform: 'translateX(-50%)' }}
-      />
+        ref={containerRef}
+        className="w-full h-64 rounded-lg relative bg-white overflow-hidden"
+      >
+        {/* 波形表示用のCanvas */}
+        <canvas
+          ref={waveformCanvasRef}
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            zIndex: 0,
+          }}
+        />
+
+        {/* グラフ描画用のCanvas */}
+        <canvas
+          ref={canvasRef}
+          onMouseDown={edit.onMouseDown}
+          onMouseMove={edit.onMouseMove}
+          onMouseUp={edit.onMouseUp}
+          onClick={edit.onClick}
+          className="absolute inset-0"
+          style={{
+            background: 'transparent',
+            zIndex: 10,
+            cursor: edit.isDragging
+              ? edit.dragMode === 'horizontal' ||
+                edit.dragMode === 'single-horizontal'
+                ? 'ew-resize'
+                : edit.dragMode === 'vertical' ||
+                    edit.dragMode === 'single-vertical'
+                  ? 'ns-resize'
+                  : edit.dragMode === 'range-move'
+                    ? 'move'
+                    : edit.dragMode === 'range-left' ||
+                        edit.dragMode === 'range-right' ||
+                        edit.dragMode === 'range-center-left' ||
+                        edit.dragMode === 'range-center-right'
+                      ? 'col-resize'
+                      : edit.dragMode === 'pos-scale-top' ||
+                          edit.dragMode === 'pos-scale-bottom' ||
+                          edit.dragMode === 'pos-scale-center-top' ||
+                          edit.dragMode === 'pos-scale-center-bottom'
+                        ? 'ns-resize'
+                        : 'move'
+              : edit.hoverCursor,
+          }}
+        />
+
+        {/* 現在位置インジケーター（コンテナ中央に固定） */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-blue-500 pointer-events-none z-20"
+          style={{ left: '50%', transform: 'translateX(-50%)' }}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleEqualize}
+          disabled={!canEqualize}
+          className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          等間隔にする
+        </button>
+      </div>
     </div>
   )
 }
