@@ -56,6 +56,72 @@ export const useEdit = ({ canvasRef }: UseEditParams) => {
     return true
   }, [select.selectedIndices, actionsHook.equalizeIntervals])
 
+  const simplifyAlternatingSelectedRange = useCallback(() => {
+    const indices = [...select.selectedIndices].sort((a, b) => a - b)
+    if (indices.length < 2) return false
+
+    const isContinuous = indices.every(
+      (index, i) => i === 0 || index === indices[i - 1] + 1,
+    )
+
+    if (!isContinuous) return false
+
+    const baseActions = actionsHook.actions
+    const selectedActions = indices
+      .map((index) => ({ index, action: baseActions[index] }))
+      .filter(
+        (entry): entry is { index: number; action: FunscriptAction } =>
+          entry.action !== undefined,
+      )
+
+    if (selectedActions.length < 3) return false
+
+    const keepIndices = new Set<number>()
+    keepIndices.add(selectedActions[0].index)
+
+    let prev = selectedActions[0]
+    let prevDir = 0
+
+    for (let i = 1; i < selectedActions.length; i += 1) {
+      const current = selectedActions[i]
+      const delta = current.action.pos - prev.action.pos
+      const dir = Math.sign(delta)
+
+      if (dir === 0) {
+        prev = current
+        continue
+      }
+
+      if (prevDir === 0) {
+        prevDir = dir
+        prev = current
+        continue
+      }
+
+      if (dir !== prevDir) {
+        keepIndices.add(prev.index)
+        prevDir = dir
+      }
+
+      prev = current
+    }
+
+    keepIndices.add(selectedActions[selectedActions.length - 1].index)
+
+    const deleteIndices = indices.filter((index) => !keepIndices.has(index))
+    if (deleteIndices.length === 0) return false
+
+    actionsHook.deleteActions(deleteIndices)
+    select.clearSelected()
+
+    return true
+  }, [
+    select.selectedIndices,
+    actionsHook.actions,
+    actionsHook.deleteActions,
+    select.clearSelected,
+  ])
+
   // localStorage からデータを読み込む
   useEffect(() => {
     if (!playback.file) return
@@ -95,6 +161,7 @@ export const useEdit = ({ canvasRef }: UseEditParams) => {
     // Actions
     ...actionsHook,
     equalizeSelectedRange,
+    simplifyAlternatingSelectedRange,
     // Playback
     ...playback,
     // GUI Edit

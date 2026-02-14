@@ -39,10 +39,17 @@ export const FunscriptGraph = ({
     return continuous && withinBounds
   }, [edit.selectedIndices, edit.effectiveActions.length])
 
+  const canSimplifyAlternating = canEqualize
+
   const handleEqualize = useCallback(() => {
     if (!canEqualize) return
     edit.equalizeSelectedRange()
   }, [canEqualize, edit])
+
+  const handleSimplifyAlternating = useCallback(() => {
+    if (!canSimplifyAlternating) return
+    edit.simplifyAlternatingSelectedRange()
+  }, [canSimplifyAlternating, edit])
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
@@ -479,7 +486,7 @@ export const FunscriptGraph = ({
         />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={handleEqualize}
@@ -487,6 +494,14 @@ export const FunscriptGraph = ({
           className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
         >
           等間隔にする
+        </button>
+        <button
+          type="button"
+          onClick={handleSimplifyAlternating}
+          disabled={!canSimplifyAlternating}
+          className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          上限交互に単純化
         </button>
       </div>
     </div>
