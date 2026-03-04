@@ -4,6 +4,7 @@ import { usePlayback } from '../_hooks/playback'
 import { useActions } from '../_hooks/actions'
 import { useCallback } from 'react'
 import { Funscript, isFunscript, sanitizeFunscript } from '@/lib/funscript'
+import { clsx } from 'clsx'
 
 export const FileSelector = () => {
   const { file, loadFile } = usePlayback()
@@ -77,12 +78,15 @@ export const FileSelector = () => {
 
   return (
     <div
-      className="border-2 border-dashed rounded-lg p-6 text-center transition-colors"
+      className={clsx(
+        'border-2 border-dashed rounded-lg text-center transition-colors',
+        file ? 'p-2 border-foreground/40 dark:border-background/40' : 'p-6',
+      )}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
       {file ? (
-        <div className="space-y-2">
+        <div className="flex justify-center items-center space-x-4">
           <p className="text-sm font-medium">{file.name}</p>
           <label className="inline-block px-4 py-2 bg-primary-variant text-primary-content rounded cursor-pointer hover:bg-primary-variant/80">
             ファイルを変更

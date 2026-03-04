@@ -116,7 +116,7 @@ export const MediaPlayer = () => {
       {isVideo && (
         <video
           ref={videoRef}
-          className="w-full max-h-96 rounded-lg"
+          className="w-full max-h-[760px] rounded-lg"
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleEnded}
         />

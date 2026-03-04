@@ -21,8 +21,6 @@ export default function EditPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Funscript Editor</h1>
-
       {/* ファイル選択 */}
       <FileSelector />
 
