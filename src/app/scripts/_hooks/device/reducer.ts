@@ -1,10 +1,18 @@
-import { Device, DeviceFunscriptSupported } from '@/lib/device'
+import {
+  Device,
+  DeviceContinuousMotionSupported,
+  DeviceFunscriptSupported,
+} from '@/lib/device'
 import { LoobI } from '@/lib/device/loob'
 
 export interface DeviceState {
   devices: {
     found: { [key: string]: string }
-    connected: { [key: string]: Device & DeviceFunscriptSupported }
+    connected: {
+      [key: string]: Device &
+        DeviceFunscriptSupported &
+        DeviceContinuousMotionSupported
+    }
   }
 }
 

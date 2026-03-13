@@ -1,13 +1,22 @@
 import { Funscript, FunscriptAction, sanitizeFunscript } from '@/lib/funscript'
-import { Device, DeviceFunscriptSupported } from '..'
+import {
+  Device,
+  DeviceContinuousMotionSupported,
+  DeviceFunscriptSupported,
+} from '..'
 
 const ServiceUUID = 'b75c49d2-04a3-4071-a0b5-35853eb08307'
 const WriteUUID = 'ba5c49d2-04a3-4071-a0b5-35853eb08307'
 
-export interface LoobI extends Device, DeviceFunscriptSupported {
+export interface LoobI
+  extends Device, DeviceFunscriptSupported, DeviceContinuousMotionSupported {
   connect(device: BluetoothDevice): Promise<LoobI>
   sendCommand(data: BufferSource): Promise<void>
-  sendLinearCommand(duration: number, pos: number): Promise<void>
+  sendLinearCommand(
+    duration: number,
+    pos: number,
+    options?: { minApplyFactor?: number },
+  ): Promise<boolean>
   play(playbackStartTime: number, videoCurrentTime: number): Promise<void>
 }
 
@@ -32,6 +41,7 @@ export class Loob implements LoobI {
   private service: BluetoothRemoteGATTService | null = null
   private characteristic: BluetoothRemoteGATTCharacteristic | null = null
   private linearInvert: boolean = false
+  private gattWriteQueue: Promise<void> = Promise.resolve()
 
   private constructor() {}
 
@@ -73,26 +83,35 @@ export class Loob implements LoobI {
       throw 'Characteristic not found'
     }
 
-    try {
-      console.log('Command sent:', data)
-      await this.characteristic.writeValue(data)
-    } catch (error) {
-      console.error(`Failed to send command: ${error}`)
-    }
+    const nextWrite = this.gattWriteQueue
+      .catch(() => undefined)
+      .then(async () => {
+        console.log('Command sent:', data)
+        await this.characteristic?.writeValue(data)
+      })
+
+    this.gattWriteQueue = nextWrite
+
+    await nextWrite
   }
 
   /**
    * @param duration milliseconds
    * @param pos position in percentage (0-100)
    */
-  async sendLinearCommand(duration: number, pos: number) {
+  async sendLinearCommand(
+    duration: number,
+    pos: number,
+    options?: { minApplyFactor?: number },
+  ): Promise<boolean> {
     console.log('Send linear command:', duration, pos)
 
     // C#コードに合わせて最小持続時間を適用
     if (this.lastLinearCommandCalled) {
       const prevPos = this.lastLinearCommandCalled.pos
       const posDiff = Math.abs(pos - prevPos)
-      duration = Math.max(Loob.minApplyDuration(posDiff), duration)
+      const minApplyFactor = options?.minApplyFactor ?? 5
+      duration = Math.max(posDiff * minApplyFactor, duration)
     }
 
     // linearInvertがtrueの場合、位置を反転
@@ -107,14 +126,20 @@ export class Loob implements LoobI {
       timeValue & 0xff,
     ])
 
-    this.lastLinearCommandCalled = {
-      timestamp: new Date(),
-      duration,
-      pos,
-    }
+    try {
+      // C#のコードではsleep()は使わない - コマンド送信のみ
+      await this.sendCommand(data)
 
-    // C#のコードではsleep()は使わない - コマンド送信のみ
-    await this.sendCommand(data)
+      this.lastLinearCommandCalled = {
+        timestamp: new Date(),
+        duration,
+        pos,
+      }
+      return true
+    } catch (error) {
+      console.error(`Failed to send command: ${error}`)
+      return false
+    }
   }
 
   /**
@@ -188,6 +213,8 @@ export class Loob implements LoobI {
   }
 
   private isPlaying = false
+  private isContinuousPlaying = false
+  private continuousLoopGeneration = 0
 
   async play(playbackStartTime: number, videoCurrentTime: number) {
     console.log('Play', this.device?.name)
@@ -199,6 +226,8 @@ export class Loob implements LoobI {
       console.log('Skip playing: already playing')
       return // already playing
     }
+    this.isContinuousPlaying = false
+    this.continuousLoopGeneration += 1
     this.isPlaying = true
 
     // 現在時刻に基づいて正しいアクションインデックスを設定
@@ -228,8 +257,12 @@ export class Loob implements LoobI {
         }
         // アクションの開始時刻に到達したらコマンド送信し、インデックスを進める
         if (currentTime >= currentAction.at - duration) {
-          await this.sendLinearCommand(duration, currentAction.pos)
-          this.funscriptActionIndex++
+          const sent = await this.sendLinearCommand(duration, currentAction.pos)
+          if (sent) {
+            this.funscriptActionIndex++
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 24))
+          }
           continue
         }
         await new Promise((resolve) => setTimeout(resolve, 8))
@@ -264,6 +297,122 @@ export class Loob implements LoobI {
   async pause() {
     console.log('Pause', this.device?.name)
     this.isPlaying = false
+    this.isContinuousPlaying = false
+    this.continuousLoopGeneration += 1
+  }
+
+  async startContinuousMotion(options: {
+    speed: number
+    dutyRatio: number
+    offset: number
+    limit: number
+    inverted: boolean
+  }) {
+    const lowerPos = Math.max(0, Math.min(options.offset, options.limit))
+    const upperPos = Math.min(100, Math.max(options.offset, options.limit))
+    const speed = Math.max(1, Math.min(100, options.speed))
+    const dutyRatio = Math.max(20, Math.min(80, options.dutyRatio))
+
+    if (lowerPos === upperPos) {
+      return
+    }
+
+    this.linearInvert = options.inverted
+
+    this.isPlaying = false
+    this.isContinuousPlaying = true
+    this.continuousLoopGeneration += 1
+    const currentGeneration = this.continuousLoopGeneration
+
+    // 直前モードの残り時間で初回送信が遅れないようにリセット
+    this.lastLinearCommandCalled = {
+      timestamp: new Date(0),
+      duration: 0,
+      pos: this.lastLinearCommandCalled.pos,
+    }
+
+    const minCycleDuration = 180
+    const maxCycleDuration = 3200
+    const speedRate = (speed - 1) / 99
+    const baseCycleDuration = Math.round(
+      maxCycleDuration - speedRate * (maxCycleDuration - minCycleDuration),
+    )
+
+    // Range が狭いほど周期を短くして、上下端で止まって見える時間を減らす
+    const spanRate = Math.max(0.05, (upperPos - lowerPos) / 100)
+    const cycleDuration = Math.max(90, Math.round(baseCycleDuration * spanRate))
+
+    const upDuration = Math.max(
+      45,
+      Math.round((cycleDuration * dutyRatio) / 100),
+    )
+    const downDuration = Math.max(45, cycleDuration - upDuration)
+    const commandLeadMs = 20
+
+    while (
+      this.isContinuousPlaying &&
+      this.continuousLoopGeneration === currentGeneration
+    ) {
+      if (
+        !(await this.waitUntilLinearCommandWindow(
+          currentGeneration,
+          commandLeadMs,
+        ))
+      ) {
+        break
+      }
+      const sentUp = await this.sendLinearCommand(upDuration, upperPos, {
+        minApplyFactor: 2,
+      })
+      if (!sentUp) {
+        await new Promise((resolve) => setTimeout(resolve, 24))
+        continue
+      }
+
+      if (
+        !(await this.waitUntilLinearCommandWindow(
+          currentGeneration,
+          commandLeadMs,
+        ))
+      ) {
+        break
+      }
+      const sentDown = await this.sendLinearCommand(downDuration, lowerPos, {
+        minApplyFactor: 2,
+      })
+      if (!sentDown) {
+        await new Promise((resolve) => setTimeout(resolve, 24))
+        continue
+      }
+    }
+  }
+
+  async stopContinuousMotion() {
+    this.isContinuousPlaying = false
+    this.continuousLoopGeneration += 1
+  }
+
+  private async waitUntilLinearCommandWindow(
+    generation: number,
+    leadMs: number,
+  ) {
+    while (
+      this.isContinuousPlaying &&
+      this.continuousLoopGeneration === generation
+    ) {
+      const elapsed =
+        Date.now() - this.lastLinearCommandCalled.timestamp.getTime()
+      const remaining = this.lastLinearCommandCalled.duration - elapsed
+
+      if (remaining <= leadMs) {
+        return true
+      }
+
+      const sleepDuration = Math.min(16, remaining)
+      await new Promise((resolve) => setTimeout(resolve, sleepDuration))
+    }
+
+    return false
   }
 }
 

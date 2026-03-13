@@ -11,3 +11,14 @@ export interface DeviceFunscriptSupported {
   play(playbackStartTime: number, videoCurrentTime: number): Promise<void>
   pause(): Promise<void>
 }
+
+export interface DeviceContinuousMotionSupported {
+  startContinuousMotion(options: {
+    speed: number
+    dutyRatio: number
+    offset: number
+    limit: number
+    inverted: boolean
+  }): Promise<void>
+  stopContinuousMotion(): Promise<void>
+}

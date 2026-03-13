@@ -69,7 +69,7 @@ export const ScriptGraph = ({
       <div
         className={clsx(
           ['relative', 'flex'],
-          ['border-y-[1px]', 'border-primary-content'],
+          ['border-y', 'border-primary-content'],
         )}
         style={{ width: duration * 100, minWidth: duration * 100 }}
         onClick={() => {

@@ -11,6 +11,11 @@ export interface OptionsState {
     offset: number
     limit: number
   }
+  continuous: {
+    speed: number
+    dutyRatio: number
+    enabled: boolean
+  }
 }
 
 interface OptionsPaneProps {

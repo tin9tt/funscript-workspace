@@ -7,13 +7,14 @@ import { AudioGraph } from './_components/AudioGraph'
 import { useFileContext } from './_hooks/file'
 import { VideoViewer } from './_components/Video'
 import { useDeviceContext } from './_hooks/device'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSeekContext } from './_hooks/seek'
 import { OptionsPane, OptionsState } from './_components/OptionsPane'
 import { useScriptInvert } from './_hooks/fileWithLinearOptions/invert/hook'
 import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
 import { HorizontalRangeSlider, ToggleSwitch } from '../_components/common'
 import { TrackAudio, TrackVideo } from './_hooks/file/reducer'
+import { DeviceControlPanel } from './_components/DeviceControlPanel'
 
 const usePersistentOption = () => {
   const STORAGE_KEY = 'funscript-options'
@@ -23,6 +24,11 @@ const usePersistentOption = () => {
     range: {
       offset: 0,
       limit: 100,
+    },
+    continuous: {
+      speed: 50,
+      dutyRatio: 50,
+      enabled: false,
     },
   }
 
@@ -34,14 +40,19 @@ const usePersistentOption = () => {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
-        // 基本的なバリデーション
-        if (
-          typeof parsed.inverted === 'boolean' &&
-          typeof parsed.range?.offset === 'number' &&
-          typeof parsed.range?.limit === 'number'
-        ) {
-          setOption(parsed)
-        }
+        // 既存データとの後方互換を維持しつつデフォルト値とマージする
+        setOption({
+          ...defaultOptions,
+          ...parsed,
+          range: {
+            ...defaultOptions.range,
+            ...(parsed?.range ?? {}),
+          },
+          continuous: {
+            ...defaultOptions.continuous,
+            ...(parsed?.continuous ?? {}),
+          },
+        })
       }
     } catch (error) {
       console.warn('Failed to load options from localStorage:', error)
@@ -117,6 +128,20 @@ const useLoopOption = (fileId: string, duration: number) => {
   return { loopRange, saveLoopRange }
 }
 
+const useDebouncedValue = <T,>(value: T, delayMs: number): T => {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebounced(value)
+    }, delayMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [value, delayMs])
+
+  return debounced
+}
+
 // ファイル名とサイズからハッシュを生成する関数（同期版）
 const generateFileId = (file?: File): string => {
   if (!file) return ''
@@ -155,10 +180,15 @@ const useFile = (duration: number) => {
 
 export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
+  const hasConnectedDevice = Object.keys(devices).length > 0
+  const hasScriptRef = useRef(false)
 
   const { isPlaying, currentTime, duration, play, pause, seek } =
     useSeekContext(0, {
       preSeek: async (seekTime, isPlaying) => {
+        if (!hasScriptRef.current) {
+          return
+        }
         console.log(
           `Preparing to seek device to ${seekTime} (isPlaying: ${isPlaying})`,
         )
@@ -167,6 +197,9 @@ export default function Scripts() {
         await new Promise((resolve) => setTimeout(resolve, 500))
       },
       onSeek: async (seekTime, isPlaying) => {
+        if (!hasScriptRef.current) {
+          return
+        }
         console.log(`Seeking device to ${seekTime} (isPlaying: ${isPlaying})`)
         if (isPlaying) device.play(Date.now(), seekTime * 1000)
       },
@@ -174,12 +207,26 @@ export default function Scripts() {
 
   const { tracks, option, saveOption, loopRange, saveLoopRange } =
     useFile(duration)
+  const hasScript = Boolean(tracks[0]?.script)
+  hasScriptRef.current = hasScript
 
   // OptionsPane expansion state
   const [isPaneExpanded, setIsPaneExpanded] = useState(false)
 
   // Loop state
   const [isLoopEnabled, setIsLoopEnabled] = useState(false)
+
+  const debouncedContinuousSpeed = useDebouncedValue(
+    option.continuous.speed,
+    250,
+  )
+  const debouncedContinuousDutyRatio = useDebouncedValue(
+    option.continuous.dutyRatio,
+    250,
+  )
+  const debouncedContinuousOffset = useDebouncedValue(option.range.offset, 250)
+  const debouncedContinuousLimit = useDebouncedValue(option.range.limit, 250)
+  const debouncedContinuousInverted = useDebouncedValue(option.inverted, 250)
 
   // Close OptionsPane when playback starts
   useEffect(() => {
@@ -217,6 +264,9 @@ export default function Scripts() {
   }, [currentTime, isLoopEnabled, loopRange, duration, seek])
 
   useEffect(() => {
+    if (!hasConnectedDevice || !hasScript) {
+      return
+    }
     if (tracks.length === 0) {
       return
     }
@@ -238,9 +288,12 @@ export default function Scripts() {
     })
     // Note: This effect should only run with changes to devices or tracks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devices, tracks])
+  }, [devices, tracks, hasConnectedDevice, hasScript])
 
   useEffect(() => {
+    if (!hasConnectedDevice || !hasScript) {
+      return
+    }
     if (isPlaying) {
       device.seek(currentTime)
       device.play(Date.now(), currentTime * 1000)
@@ -248,7 +301,44 @@ export default function Scripts() {
       device.pause()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying])
+  }, [isPlaying, hasConnectedDevice, hasScript])
+
+  useEffect(() => {
+    if (!hasConnectedDevice || hasScript) {
+      device.stopContinuousMotion()
+      return
+    }
+
+    if (!option.continuous.enabled || !isPlaying) {
+      device.stopContinuousMotion()
+      return
+    }
+
+    device.startContinuousMotion({
+      speed: debouncedContinuousSpeed,
+      dutyRatio: debouncedContinuousDutyRatio,
+      offset: debouncedContinuousOffset,
+      limit: debouncedContinuousLimit,
+      inverted: debouncedContinuousInverted,
+    })
+  }, [
+    hasConnectedDevice,
+    hasScript,
+    isPlaying,
+    option.continuous.enabled,
+    debouncedContinuousSpeed,
+    debouncedContinuousDutyRatio,
+    debouncedContinuousOffset,
+    debouncedContinuousLimit,
+    debouncedContinuousInverted,
+  ])
+
+  useEffect(() => {
+    return () => {
+      device.stopContinuousMotion()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className={clsx('grid', 'gap-8')}>
@@ -289,32 +379,44 @@ export default function Scripts() {
           </div>
         </div>
       </Card>
-      <Card
-        className={clsx(
-          'py-8',
-          'grid',
-          'gap-8',
-          'min-h-[396px]',
-          'relative',
-          'overflow-hidden',
-        )}
-      >
-        <ScriptGraph
-          actions={tracks[0]?.script?.actions ?? []}
-          graphLeftPaddingPercentage={0.25}
-        />
-        {/* Options pane overlay */}
-        <div className={clsx('absolute', 'top-0', 'right-0', 'z-10')}>
-          <OptionsPane
-            options={option}
-            onOptionsChange={saveOption}
-            isPlaying={isPlaying}
-            onPaneOpen={handlePaneOpen}
-            isExpanded={isPaneExpanded}
-            onExpandedChange={setIsPaneExpanded}
-          />
-        </div>
-      </Card>
+      {hasConnectedDevice && (
+        <Card
+          className={clsx(
+            'py-8',
+            'grid',
+            'gap-8',
+            'min-h-[396px]',
+            'relative',
+            'overflow-hidden',
+          )}
+        >
+          {hasScript ? (
+            <>
+              <ScriptGraph
+                actions={tracks[0]?.script?.actions ?? []}
+                graphLeftPaddingPercentage={0.25}
+              />
+              {/* Options pane overlay */}
+              <div className={clsx('absolute', 'top-0', 'right-0', 'z-10')}>
+                <OptionsPane
+                  options={option}
+                  onOptionsChange={saveOption}
+                  isPlaying={isPlaying}
+                  onPaneOpen={handlePaneOpen}
+                  isExpanded={isPaneExpanded}
+                  onExpandedChange={setIsPaneExpanded}
+                />
+              </div>
+            </>
+          ) : (
+            <DeviceControlPanel
+              options={option}
+              onOptionsChange={saveOption}
+              isPlaying={isPlaying}
+            />
+          )}
+        </Card>
+      )}
     </div>
   )
 }

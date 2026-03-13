@@ -76,6 +76,28 @@ export const useDeviceContext = () => {
     )
   }
 
+  const startContinuousMotion = (options: {
+    speed: number
+    dutyRatio: number
+    offset: number
+    limit: number
+    inverted: boolean
+  }) => {
+    Promise.all(
+      Object.keys(state.devices.connected).map((key) =>
+        state.devices.connected[key].startContinuousMotion(options),
+      ),
+    )
+  }
+
+  const stopContinuousMotion = () => {
+    Promise.all(
+      Object.keys(state.devices.connected).map((key) =>
+        state.devices.connected[key].stopContinuousMotion(),
+      ),
+    )
+  }
+
   return {
     devices: state.devices.connected,
     requestDevices,
@@ -84,5 +106,7 @@ export const useDeviceContext = () => {
     seek,
     play,
     pause,
+    startContinuousMotion,
+    stopContinuousMotion,
   }
 }
