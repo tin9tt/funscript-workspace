@@ -28,7 +28,7 @@ const usePersistentOption = () => {
     continuous: {
       speed: 50,
       dutyRatio: 50,
-      enabled: false,
+      enabled: true,
     },
   }
 
@@ -215,6 +215,8 @@ export default function Scripts() {
 
   // Loop state
   const [isLoopEnabled, setIsLoopEnabled] = useState(false)
+  const [isManualContinuousPlaying, setIsManualContinuousPlaying] =
+    useState(false)
 
   const debouncedContinuousSpeed = useDebouncedValue(
     option.continuous.speed,
@@ -304,12 +306,25 @@ export default function Scripts() {
   }, [isPlaying, hasConnectedDevice, hasScript])
 
   useEffect(() => {
+    if (isPlaying) {
+      setIsManualContinuousPlaying(false)
+    }
+  }, [isPlaying])
+
+  useEffect(() => {
+    if (!hasConnectedDevice || hasScript || !option.continuous.enabled) {
+      setIsManualContinuousPlaying(false)
+    }
+  }, [hasConnectedDevice, hasScript, option.continuous.enabled])
+
+  useEffect(() => {
     if (!hasConnectedDevice || hasScript) {
       device.stopContinuousMotion()
       return
     }
 
-    if (!option.continuous.enabled || !isPlaying) {
+    const shouldPlayContinuous = isPlaying || isManualContinuousPlaying
+    if (!option.continuous.enabled || !shouldPlayContinuous) {
       device.stopContinuousMotion()
       return
     }
@@ -325,6 +340,7 @@ export default function Scripts() {
     hasConnectedDevice,
     hasScript,
     isPlaying,
+    isManualContinuousPlaying,
     option.continuous.enabled,
     debouncedContinuousSpeed,
     debouncedContinuousDutyRatio,
@@ -412,7 +428,9 @@ export default function Scripts() {
             <DeviceControlPanel
               options={option}
               onOptionsChange={saveOption}
-              isPlaying={isPlaying}
+              isMediaPlaying={isPlaying}
+              isManualPlaying={isManualContinuousPlaying}
+              onManualPlayToggle={setIsManualContinuousPlaying}
             />
           )}
         </Card>

@@ -8,13 +8,17 @@ import { OptionsState } from './OptionsPane'
 interface DeviceControlPanelProps {
   options: OptionsState
   onOptionsChange: (options: OptionsState) => void
-  isPlaying: boolean
+  isMediaPlaying: boolean
+  isManualPlaying: boolean
+  onManualPlayToggle: (playing: boolean) => void
 }
 
 export const DeviceControlPanel = ({
   options,
   onOptionsChange,
-  isPlaying,
+  isMediaPlaying,
+  isManualPlaying,
+  onManualPlayToggle,
 }: DeviceControlPanelProps) => {
   const handleRangeChange = (offset: number, limit: number) => {
     onOptionsChange({
@@ -86,11 +90,38 @@ export const DeviceControlPanel = ({
         </button>
       </div>
 
-      {!isPlaying && options.continuous.enabled && (
+      {!isMediaPlaying && !isManualPlaying && options.continuous.enabled && (
         <div className={clsx('text-xs', 'text-gray-600')}>
           Media playback is paused. Device commands are not sent.
         </div>
       )}
+
+      <div className={clsx('flex', 'items-center', 'gap-3')}>
+        <button
+          className={clsx(
+            'px-4',
+            'py-2',
+            'rounded-md',
+            'font-semibold',
+            'transition-colors',
+            isManualPlaying
+              ? ['bg-primary-variant', 'text-primary-content']
+              : ['bg-primary-content', 'text-primary-variant'],
+            (isMediaPlaying || !options.continuous.enabled) && 'opacity-50',
+          )}
+          disabled={isMediaPlaying || !options.continuous.enabled}
+          onClick={() => onManualPlayToggle(!isManualPlaying)}
+        >
+          {isManualPlaying ? 'Stop Manual' : 'Manual Play'}
+        </button>
+        <span className={clsx('text-xs', 'text-gray-600')}>
+          {isMediaPlaying
+            ? 'Disabled while media is playing'
+            : options.continuous.enabled
+              ? 'Play device motion without media playback'
+              : 'Turn ON first'}
+        </span>
+      </div>
 
       <div className={clsx('grid', 'grid-cols-[240px_1fr]', 'gap-12')}>
         <div className={clsx('grid', 'gap-4', 'w-60')}>
