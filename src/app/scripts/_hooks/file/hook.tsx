@@ -3,7 +3,7 @@
 import { useContext } from 'react'
 import { FileContext } from './context'
 import { isFunscript } from '@/lib/funscript'
-import { isAudio, isVideo } from './reducer'
+import { isAudio, isImage, isVideo } from './reducer'
 
 export const useFileContext = () => {
   const { state, dispatch } = useContext(FileContext)
@@ -11,6 +11,9 @@ export const useFileContext = () => {
   const load = (file: File, index: number) => {
     if (isAudio(file) || isVideo(file)) {
       dispatch({ kind: 'load track', payload: { index, file } })
+    }
+    if (isImage(file)) {
+      dispatch({ kind: 'load image', payload: { file } })
     }
     if (file.name.endsWith('.funscript') || file.type === 'application/json') {
       const r = new FileReader()
@@ -30,6 +33,7 @@ export const useFileContext = () => {
 
   return {
     tracks: state.tracks,
+    image: state.image,
     load,
     clear,
   }

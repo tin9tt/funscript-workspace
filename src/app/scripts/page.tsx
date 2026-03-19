@@ -158,7 +158,7 @@ const generateFileId = (file?: File): string => {
 }
 
 const useFile = (duration: number) => {
-  const { tracks } = useFileContext()
+  const { tracks, image } = useFileContext()
   const track = tracks.find(
     (track) => track.kind === 'audio' || track.kind === 'video',
   ) as TrackAudio | TrackVideo | undefined
@@ -171,6 +171,7 @@ const useFile = (duration: number) => {
   const finalTracks = useScriptRange(invertedTracks, options.range)
   return {
     ...finalTracks,
+    image,
     option: options,
     saveOption,
     loopRange,
@@ -205,7 +206,7 @@ export default function Scripts() {
       },
     })
 
-  const { tracks, option, saveOption, loopRange, saveLoopRange } =
+  const { tracks, image, option, saveOption, loopRange, saveLoopRange } =
     useFile(duration)
   const hasScript = Boolean(tracks[0]?.script)
   hasScriptRef.current = hasScript
@@ -365,6 +366,7 @@ export default function Scripts() {
         {tracks[0]?.kind === 'audio' && (
           <AudioGraph
             file={tracks[0]?.file}
+            imageFile={image}
             graphLeftPaddingPercentage={0.25}
           />
         )}

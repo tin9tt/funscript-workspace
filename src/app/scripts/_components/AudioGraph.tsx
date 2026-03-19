@@ -1,35 +1,46 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import WavesurferPlayer from '@wavesurfer/react'
 import clsx from 'clsx'
 import { AudioSelector } from './AudioSelector'
 import WaveSurfer from 'wavesurfer.js'
 import { roundTime, useSeekContext } from '../_hooks/seek'
+import { ImageSelector } from './ImageSelector'
+import { FullscreenImageViewer } from './FullscreenImageViewer'
+import { FiMaximize2 } from 'react-icons/fi'
 
 export const AudioGraph = ({
   file,
+  imageFile,
   graphLeftPaddingPercentage,
 }: {
   file?: File
+  imageFile?: File
   /** percentage of width as [0..1] (0 = 0%, 1 = 100%) */
   graphLeftPaddingPercentage: number
 }) => {
+  const [audioFile, setAudioFile] = useState<File | undefined>()
+  const [selectedImageFile, setSelectedImageFile] = useState<File | undefined>()
   const [url, setURL] = useState<string | undefined>()
   const [filename, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const onAudioFileSelected = (file: File) => {
-    setURL(URL.createObjectURL(file))
-    setName(file.name)
-    setLoading(true)
-    wavesurfer?.seekTo(0)
+    setAudioFile(file)
   }
-  useLayoutEffect(() => {
+  const onImageFileSelected = (file: File) => {
+    setSelectedImageFile(file)
+  }
+  useEffect(() => {
     if (file && file.type.split('/')[0] === 'audio') {
-      onAudioFileSelected(file)
+      setAudioFile(file)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file])
+  useEffect(() => {
+    if (imageFile && imageFile.type.split('/')[0] === 'image') {
+      setSelectedImageFile(imageFile)
+    }
+  }, [imageFile])
 
   const [wavesurfer, setWavesurfer] = useState<WaveSurfer | undefined>()
   const onReady = (ws: WaveSurfer) => {
@@ -52,6 +63,42 @@ export const AudioGraph = ({
   } = useSeekContext(1)
 
   const [isFinished, setIsFinished] = useState(false)
+  const [imageURL, setImageURL] = useState<string | undefined>()
+  const [imageName, setImageName] = useState('')
+  const [isImageFullscreen, setIsImageFullscreen] = useState(false)
+
+  useEffect(() => {
+    if (!audioFile) {
+      setURL(undefined)
+      setName('')
+      setLoading(false)
+      return
+    }
+
+    const objectURL = URL.createObjectURL(audioFile)
+    setURL(objectURL)
+    setName(audioFile.name)
+    setLoading(true)
+    setIsFinished(false)
+    wavesurfer?.seekTo(0)
+
+    return () => URL.revokeObjectURL(objectURL)
+  }, [audioFile])
+
+  useEffect(() => {
+    if (!selectedImageFile) {
+      setImageURL(undefined)
+      setImageName('')
+      setIsImageFullscreen(false)
+      return
+    }
+
+    const objectURL = URL.createObjectURL(selectedImageFile)
+    setImageURL(objectURL)
+    setImageName(selectedImageFile.name)
+
+    return () => URL.revokeObjectURL(objectURL)
+  }, [selectedImageFile])
 
   useEffect(() => {
     // 再生終了フラグがセットされている場合は自動再生を防ぐ
@@ -79,10 +126,59 @@ export const AudioGraph = ({
 
   return (
     <div className={clsx('grid', 'gap-2')}>
+      {imageURL && (
+        <div
+          className={clsx(
+            'grid',
+            'gap-2',
+            'rounded-lg',
+            'border',
+            'border-primary-content',
+            'bg-black/5',
+            'p-3',
+          )}
+        >
+          <div className={clsx('text-sm', 'font-medium')}>{imageName}</div>
+          <div className={clsx('relative', 'overflow-hidden', 'rounded-md')}>
+            <img
+              src={imageURL}
+              alt={imageName || 'Loaded image'}
+              className={clsx(
+                'h-64',
+                'w-full',
+                'rounded-md',
+                'bg-black/10',
+                'object-contain',
+              )}
+              onClick={() => setIsImageFullscreen(true)}
+            />
+            <button
+              className={clsx(
+                'absolute',
+                'bottom-3',
+                'right-3',
+                'rounded-full',
+                'border',
+                'border-white/40',
+                'bg-black/60',
+                'p-2',
+                'text-white',
+              )}
+              onClick={() => setIsImageFullscreen(true)}
+              aria-label="Open image fullscreen"
+            >
+              <FiMaximize2 size={18} />
+            </button>
+          </div>
+        </div>
+      )}
       <div className={clsx('flex', 'justify-between')}>
         {filename &&
           `${filename}` + (loading ? '' : ` (${roundTime(duration)} s)`)}
-        <AudioSelector set={onAudioFileSelected} />
+        <div className={clsx('flex', 'gap-2')}>
+          <ImageSelector set={onImageFileSelected} />
+          <AudioSelector set={onAudioFileSelected} />
+        </div>
       </div>
       {loading && <>{`Loading...`}</>}
       <div
@@ -168,6 +264,14 @@ export const AudioGraph = ({
           </button>
           {`${roundTime(wavesurfer?.getCurrentTime() ?? 0)} s`}
         </div>
+      )}
+      {imageURL && (
+        <FullscreenImageViewer
+          src={imageURL}
+          alt={imageName || 'Loaded image'}
+          isOpen={isImageFullscreen}
+          onClose={() => setIsImageFullscreen(false)}
+        />
       )}
     </div>
   )

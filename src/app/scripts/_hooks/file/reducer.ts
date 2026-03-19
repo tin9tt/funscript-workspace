@@ -10,6 +10,7 @@ export type Track = ({ kind: 'unset' } | TrackAudio | TrackVideo) & {
 
 export interface FileState {
   tracks: Track[]
+  image?: File
 }
 
 export type FileDispatchAction =
@@ -20,6 +21,10 @@ export type FileDispatchAction =
   | {
       kind: 'load script'
       payload: { index: number; script: Funscript }
+    }
+  | {
+      kind: 'load image'
+      payload: { file: File }
     }
   | { kind: 'clear' }
 
@@ -50,12 +55,18 @@ export const FileStateReducer = (
         script: action.payload.script,
       }
       return { ...currState, tracks: [...currState.tracks] }
+    case 'load image':
+      return {
+        ...currState,
+        image: action.payload.file,
+      }
     case 'clear':
-      return { ...currState, tracks: [] }
+      return { ...currState, tracks: [], image: undefined }
     default:
       return currState
   }
 }
 
 export const isAudio = (file: File): boolean => file.type.startsWith('audio')
+export const isImage = (file: File): boolean => file.type.startsWith('image')
 export const isVideo = (file: File): boolean => file.type.startsWith('video')
