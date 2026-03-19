@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import clsx from 'clsx'
+import packageJson from '../../package.json'
 import { Navigation, Sidebar } from './_components/Sidebar'
 import FileSVG from '@/assets/images/file.svg'
 
@@ -43,6 +44,8 @@ const navigations: Navigation[] = [
   },
 ]
 
+const appVersion = `v${packageJson.version}`
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -59,6 +62,7 @@ export default function RootLayout({
       >
         <Sidebar
           navigations={navigations}
+          version={appVersion}
           className={clsx('w-60', 'min-w-60')}
         />
         <div
