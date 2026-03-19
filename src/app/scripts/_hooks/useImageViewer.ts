@@ -54,7 +54,10 @@ const clampOffset = (
   containerSize: Size,
 ): Point => {
   const containedSize = getContainedSize(imageSize, containerSize)
-  const maxOffsetX = Math.max(0, (containedSize.width * scale - containerSize.width) / 2)
+  const maxOffsetX = Math.max(
+    0,
+    (containedSize.width * scale - containerSize.width) / 2,
+  )
   const maxOffsetY = Math.max(
     0,
     (containedSize.height * scale - containerSize.height) / 2,

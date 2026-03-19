@@ -8,6 +8,30 @@ import {
 const ServiceUUID = 'b75c49d2-04a3-4071-a0b5-35853eb08307'
 const WriteUUID = 'ba5c49d2-04a3-4071-a0b5-35853eb08307'
 
+const ContinuousMotionMinCycleDuration = 180
+const ContinuousMotionMaxCycleDuration = 3200
+const ContinuousMotionMediumSpeed = 50
+
+export const calculateContinuousBaseCycleDuration = (speed: number): number => {
+  const normalizedSpeed = Math.max(1, Math.min(100, speed))
+  const speedRate = (normalizedSpeed - 1) / 99
+  const mediumSpeedRate = (ContinuousMotionMediumSpeed - 1) / 99
+
+  // Keep the fastest end unchanged while making the middle and lower range less aggressive.
+  const adjustedSpeedRate = speedRate ** 2
+  const lowSpeedDurationFactor =
+    speedRate < mediumSpeedRate
+      ? 1 + Math.sqrt((mediumSpeedRate - speedRate) / mediumSpeedRate)
+      : 1
+
+  return Math.round(
+    (ContinuousMotionMaxCycleDuration -
+      adjustedSpeedRate *
+        (ContinuousMotionMaxCycleDuration - ContinuousMotionMinCycleDuration)) *
+      lowSpeedDurationFactor,
+  )
+}
+
 export interface LoobI
   extends Device, DeviceFunscriptSupported, DeviceContinuousMotionSupported {
   connect(device: BluetoothDevice): Promise<LoobI>
@@ -331,12 +355,7 @@ export class Loob implements LoobI {
       pos: this.lastLinearCommandCalled.pos,
     }
 
-    const minCycleDuration = 180
-    const maxCycleDuration = 3200
-    const speedRate = (speed - 1) / 99
-    const baseCycleDuration = Math.round(
-      maxCycleDuration - speedRate * (maxCycleDuration - minCycleDuration),
-    )
+    const baseCycleDuration = calculateContinuousBaseCycleDuration(speed)
 
     // Range が狭いほど周期を短くして、上下端で止まって見える時間を減らす
     const spanRate = Math.max(0.05, (upperPos - lowerPos) / 100)
