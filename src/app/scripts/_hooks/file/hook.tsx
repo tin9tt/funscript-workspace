@@ -27,14 +27,18 @@ export const useFileContext = () => {
       r.readAsText(file)
     }
   }
+  const addImage = (file: File) => {
+    dispatch({ kind: 'load image', payload: { file } })
+  }
   const clear = () => {
     dispatch({ kind: 'clear' })
   }
 
   return {
     tracks: state.tracks,
-    image: state.image,
+    images: state.images,
     load,
+    addImage,
     clear,
   }
 }

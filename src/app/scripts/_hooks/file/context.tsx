@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import { useFileContext } from './hook'
 
 export const defaultFileState = (): FileState => {
-  return { tracks: [], image: undefined }
+  return { tracks: [], images: [] }
 }
 
 export const FileContext = createContext<{

@@ -15,6 +15,7 @@ import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
 import { HorizontalRangeSlider, ToggleSwitch } from '../_components/common'
 import { TrackAudio, TrackVideo } from './_hooks/file/reducer'
 import { DeviceControlPanel } from './_components/DeviceControlPanel'
+import { ImageCarousel } from './_components/ImageCarousel'
 
 const usePersistentOption = () => {
   const STORAGE_KEY = 'funscript-options'
@@ -158,7 +159,7 @@ const generateFileId = (file?: File): string => {
 }
 
 const useFile = (duration: number) => {
-  const { tracks, image } = useFileContext()
+  const { tracks, images, addImage } = useFileContext()
   const track = tracks.find(
     (track) => track.kind === 'audio' || track.kind === 'video',
   ) as TrackAudio | TrackVideo | undefined
@@ -167,11 +168,12 @@ const useFile = (duration: number) => {
     generateFileId(track?.file),
     duration,
   )
-  const invertedTracks = useScriptInvert({ tracks }, options.inverted)
+  const invertedTracks = useScriptInvert({ tracks, images }, options.inverted)
   const finalTracks = useScriptRange(invertedTracks, options.range)
   return {
     ...finalTracks,
-    image,
+    images,
+    addImage,
     option: options,
     saveOption,
     loopRange,
@@ -206,8 +208,15 @@ export default function Scripts() {
       },
     })
 
-  const { tracks, image, option, saveOption, loopRange, saveLoopRange } =
-    useFile(duration)
+  const {
+    tracks,
+    images,
+    addImage,
+    option,
+    saveOption,
+    loopRange,
+    saveLoopRange,
+  } = useFile(duration)
   const hasScript = Boolean(tracks[0]?.script)
   hasScriptRef.current = hasScript
 
@@ -366,9 +375,12 @@ export default function Scripts() {
         {tracks[0]?.kind === 'audio' && (
           <AudioGraph
             file={tracks[0]?.file}
-            imageFile={image}
+            onAddImage={addImage}
             graphLeftPaddingPercentage={0.25}
           />
+        )}
+        {tracks[0]?.kind !== 'video' && images.length > 0 && (
+          <ImageCarousel images={images} />
         )}
         {tracks[0]?.kind === 'video' && (
           <div className={clsx('flex', 'justify-center')}>

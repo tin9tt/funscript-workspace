@@ -10,7 +10,7 @@ export type Track = ({ kind: 'unset' } | TrackAudio | TrackVideo) & {
 
 export interface FileState {
   tracks: Track[]
-  image?: File
+  images: File[]
 }
 
 export type FileDispatchAction =
@@ -58,10 +58,10 @@ export const FileStateReducer = (
     case 'load image':
       return {
         ...currState,
-        image: action.payload.file,
+        images: [...currState.images, action.payload.file],
       }
     case 'clear':
-      return { ...currState, tracks: [], image: undefined }
+      return { ...currState, tracks: [], images: [] }
     default:
       return currState
   }

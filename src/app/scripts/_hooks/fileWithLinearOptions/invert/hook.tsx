@@ -4,12 +4,12 @@ import { useMemo } from 'react'
 import { FileState } from '../../file/reducer'
 
 export const useScriptInvert = (
-  { tracks, image }: FileState,
+  { tracks, images }: FileState,
   inverted: boolean,
 ): FileState => {
   return useMemo(() => {
     return {
-      image,
+      images,
       tracks: tracks.map((track) => {
         if (track.script && inverted) {
           // Invert script inverted flag
@@ -24,5 +24,5 @@ export const useScriptInvert = (
         return track
       }),
     }
-  }, [image, tracks, inverted])
+  }, [images, tracks, inverted])
 }

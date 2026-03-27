@@ -4,12 +4,12 @@ import { useMemo } from 'react'
 import { FileState } from '../../file/reducer'
 
 export const useScriptRange = (
-  { tracks, image }: FileState,
+  { tracks, images }: FileState,
   { offset, limit }: { offset: number; limit: number },
 ): FileState => {
   return useMemo(() => {
     return {
-      image,
+      images,
       tracks: tracks.map((track) => {
         if (track.script) {
           // Apply range to script actions
@@ -27,7 +27,7 @@ export const useScriptRange = (
         return track
       }),
     }
-  }, [image, tracks, offset, limit])
+  }, [images, tracks, offset, limit])
 }
 
 export const rangedPos = (pos: number, offset: number, limit: number) => {

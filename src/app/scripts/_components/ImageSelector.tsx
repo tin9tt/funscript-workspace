@@ -21,11 +21,12 @@ export const ImageSelector = ({ set }: { set: (file: File) => void }) => {
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={(e) => {
           if (!e.target.files || e.target.files.length === 0) {
             return
           }
-          set(e.target.files[0])
+          Array.from(e.target.files).forEach((file) => set(file))
           e.currentTarget.value = ''
         }}
         hidden
