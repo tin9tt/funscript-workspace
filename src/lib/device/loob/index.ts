@@ -239,6 +239,7 @@ export class Loob implements LoobI {
   private isPlaying = false
   private isContinuousPlaying = false
   private continuousLoopGeneration = 0
+  private continuousMotionWorker: Worker | null = null
 
   async play(playbackStartTime: number, videoCurrentTime: number) {
     console.log('Play', this.device?.name)
@@ -342,11 +343,9 @@ export class Loob implements LoobI {
     }
 
     this.linearInvert = options.inverted
-
     this.isPlaying = false
     this.isContinuousPlaying = true
     this.continuousLoopGeneration += 1
-    const currentGeneration = this.continuousLoopGeneration
 
     // 直前モードの残り時間で初回送信が遅れないようにリセット
     this.lastLinearCommandCalled = {
@@ -368,70 +367,48 @@ export class Loob implements LoobI {
     const downDuration = Math.max(45, cycleDuration - upDuration)
     const commandLeadMs = 20
 
-    while (
-      this.isContinuousPlaying &&
-      this.continuousLoopGeneration === currentGeneration
-    ) {
-      if (
-        !(await this.waitUntilLinearCommandWindow(
-          currentGeneration,
-          commandLeadMs,
-        ))
-      ) {
-        break
-      }
-      const sentUp = await this.sendLinearCommand(upDuration, upperPos, {
-        minApplyFactor: 2,
-      })
-      if (!sentUp) {
-        await new Promise((resolve) => setTimeout(resolve, 24))
-        continue
-      }
+    // Terminate any previous Worker before starting a new one
+    this.continuousMotionWorker?.terminate()
 
-      if (
-        !(await this.waitUntilLinearCommandWindow(
-          currentGeneration,
-          commandLeadMs,
-        ))
-      ) {
-        break
-      }
-      const sentDown = await this.sendLinearCommand(downDuration, lowerPos, {
+    // タイミングループを Web Worker で実行することで、他のブラウザタブを表示中でも
+    // setTimeout がスロットリングされずに動作し続ける
+    const worker = new Worker(
+      new URL('./continuousMotionWorker.ts', import.meta.url),
+    )
+    this.continuousMotionWorker = worker
+
+    worker.onmessage = async (
+      e: MessageEvent<{ type: 'sendLinear'; duration: number; pos: number }>,
+    ) => {
+      const { duration, pos } = e.data
+      const sent = await this.sendLinearCommand(duration, pos, {
         minApplyFactor: 2,
       })
-      if (!sentDown) {
-        await new Promise((resolve) => setTimeout(resolve, 24))
-        continue
-      }
+      worker.postMessage({
+        type: 'ack',
+        success: sent,
+        timestamp: Date.now(),
+      })
     }
+
+    worker.postMessage({
+      type: 'start',
+      config: {
+        upDuration,
+        downDuration,
+        upperPos,
+        lowerPos,
+        leadMs: commandLeadMs,
+      },
+    })
   }
 
   async stopContinuousMotion() {
     this.isContinuousPlaying = false
     this.continuousLoopGeneration += 1
-  }
-
-  private async waitUntilLinearCommandWindow(
-    generation: number,
-    leadMs: number,
-  ) {
-    while (
-      this.isContinuousPlaying &&
-      this.continuousLoopGeneration === generation
-    ) {
-      const elapsed =
-        Date.now() - this.lastLinearCommandCalled.timestamp.getTime()
-      const remaining = this.lastLinearCommandCalled.duration - elapsed
-
-      if (remaining <= leadMs) {
-        return true
-      }
-
-      const sleepDuration = Math.min(16, remaining)
-      await new Promise((resolve) => setTimeout(resolve, sleepDuration))
-    }
-
-    return false
+    this.continuousMotionWorker?.postMessage({ type: 'stop' })
+    this.continuousMotionWorker?.terminate()
+    this.continuousMotionWorker = null
   }
 }
 
