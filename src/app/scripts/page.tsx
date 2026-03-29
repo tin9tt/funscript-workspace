@@ -5,7 +5,7 @@ import { ScriptGraph } from './_components/ScriptGraph'
 import clsx from 'clsx'
 import { AudioGraph } from './_components/AudioGraph'
 import { useFileContext } from './_hooks/file'
-import { VideoViewer } from './_components/Video'
+import { FullscreenVideoViewer } from './_components/FullscreenVideoViewer'
 import { useDeviceContext } from './_hooks/device'
 import { useEffect, useRef, useState } from 'react'
 import { useSeekContext } from './_hooks/seek'
@@ -366,6 +366,17 @@ export default function Scripts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const fullscreenOverlayProps = {
+    options: option,
+    onOptionsChange: saveOption,
+    isMediaPlaying: isPlaying,
+    onPlayToggle: isPlaying ? pause : play,
+    isManualPlaying: isManualContinuousPlaying,
+    onManualPlayToggle: setIsManualContinuousPlaying,
+    hasScript,
+    hasConnectedDevice,
+  }
+
   return (
     <div className={clsx('grid', 'gap-8')}>
       <div className={clsx('flex', 'justify-center')}>
@@ -380,12 +391,13 @@ export default function Scripts() {
           />
         )}
         {tracks[0]?.kind !== 'video' && images.length > 0 && (
-          <ImageCarousel images={images} />
+          <ImageCarousel images={images} overlayProps={fullscreenOverlayProps} />
         )}
         {tracks[0]?.kind === 'video' && (
-          <div className={clsx('flex', 'justify-center')}>
-            <VideoViewer file={tracks[0]?.file} />
-          </div>
+          <FullscreenVideoViewer
+            file={tracks[0]?.file}
+            overlayProps={fullscreenOverlayProps}
+          />
         )}
         {/* Range Slider and Loop Toggle */}
         <div className={clsx('flex', 'flex-col', 'gap-4', 'w-full')}>

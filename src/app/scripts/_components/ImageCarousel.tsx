@@ -4,10 +4,17 @@ import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { FiChevronLeft, FiChevronRight, FiMaximize2 } from 'react-icons/fi'
 import { FullscreenImageViewer } from './FullscreenImageViewer'
+import type { FullscreenOverlayProps } from './FullscreenControlOverlay'
 
 type ImageEntry = { src: string; alt: string }
 
-export const ImageCarousel = ({ images }: { images: File[] }) => {
+export const ImageCarousel = ({
+  images,
+  overlayProps,
+}: {
+  images: File[]
+  overlayProps?: FullscreenOverlayProps
+}) => {
   const [imageEntries, setImageEntries] = useState<ImageEntry[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -138,6 +145,7 @@ export const ImageCarousel = ({ images }: { images: File[] }) => {
         onIndexChange={setCurrentIndex}
         isOpen={isFullscreen}
         onClose={() => setIsFullscreen(false)}
+        overlayProps={overlayProps}
       />
     </div>
   )

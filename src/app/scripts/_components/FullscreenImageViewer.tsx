@@ -1,9 +1,13 @@
 'use client'
 
 import clsx from 'clsx'
-import { useEffect, useState } from 'react'
-import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
+import { useCallback, useEffect, useState } from 'react'
+import { FiChevronLeft, FiChevronRight, FiSettings, FiX } from 'react-icons/fi'
 import { useImageViewer } from '../_hooks/useImageViewer'
+import {
+  FullscreenControlOverlay,
+  type FullscreenOverlayProps,
+} from './FullscreenControlOverlay'
 
 type Size = {
   width: number
@@ -18,15 +22,24 @@ export const FullscreenImageViewer = ({
   onIndexChange,
   isOpen,
   onClose,
+  overlayProps,
 }: {
   images: ImageEntry[]
   currentIndex: number
   onIndexChange: (index: number) => void
   isOpen: boolean
   onClose: () => void
+  overlayProps?: FullscreenOverlayProps
 }) => {
   const current = images[currentIndex]
   const canNavigate = images.length > 1
+
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false)
+
+  // Reset overlay state when viewer closes (Fix: prevent overlay reappearing on next open)
+  useEffect(() => {
+    if (!isOpen) setIsOverlayOpen(false)
+  }, [isOpen])
 
   const [containerElement, setContainerElement] =
     useState<HTMLDivElement | null>(null)
@@ -41,12 +54,21 @@ export const FullscreenImageViewer = ({
     setImageSize({ width: 0, height: 0 })
   }, [currentIndex])
 
+  // Escape key: dismiss overlay first, then close viewer
+  const handleEscapeClose = useCallback(() => {
+    if (isOverlayOpen) {
+      setIsOverlayOpen(false)
+    } else {
+      onClose()
+    }
+  }, [isOverlayOpen, onClose])
+
   const { scale, offset, canDrag, isDragging, handleWheel, handleMouseDown } =
     useImageViewer({
       containerSize,
       imageSize,
       isOpen,
-      onClose,
+      onClose: handleEscapeClose,
     })
 
   useEffect(() => {
@@ -214,6 +236,37 @@ export const FullscreenImageViewer = ({
           }
         />
       </div>
+
+      {overlayProps &&
+        (overlayProps.hasConnectedDevice || overlayProps.hasScript) &&
+        !isOverlayOpen && (
+          <button
+            type="button"
+            className={clsx(
+              'absolute',
+              'bottom-4',
+              'right-4',
+              'z-10',
+              'rounded-full',
+              'border',
+              'border-white/40',
+              'bg-black/40',
+              'p-3',
+              'text-white',
+            )}
+            onClick={() => setIsOverlayOpen(true)}
+            aria-label="Open controls"
+          >
+            <FiSettings size={20} />
+          </button>
+        )}
+
+      {isOverlayOpen && overlayProps && (
+        <FullscreenControlOverlay
+          {...overlayProps}
+          onClose={() => setIsOverlayOpen(false)}
+        />
+      )}
     </div>
   )
 }

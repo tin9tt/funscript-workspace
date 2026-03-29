@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSeekContext } from '../_hooks/seek'
 
-export const VideoViewer = ({ file }: { file?: File }) => {
+export const VideoViewer = ({
+  file,
+  className,
+}: {
+  file?: File
+  className?: string
+}) => {
   const [src, setSrc] = useState<string>()
   const videoRef = useRef<HTMLVideoElement>(null)
   const { isPlaying, seeking, currentTime, init, play, pause, seek } =
@@ -41,7 +47,9 @@ export const VideoViewer = ({ file }: { file?: File }) => {
   return (
     <video
       controls
+      controlsList="nofullscreen"
       ref={videoRef}
+      className={className}
       onDurationChange={(e) => init(e.currentTarget.duration)}
       onSeeking={(e) => seek(e.currentTarget.currentTime)}
       onTimeUpdate={(e) => seek(e.currentTarget.currentTime)}

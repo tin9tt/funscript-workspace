@@ -11,6 +11,7 @@ interface DeviceControlPanelProps {
   isMediaPlaying: boolean
   isManualPlaying: boolean
   onManualPlayToggle: (playing: boolean) => void
+  compact?: boolean
 }
 
 export const DeviceControlPanel = ({
@@ -19,6 +20,7 @@ export const DeviceControlPanel = ({
   isMediaPlaying,
   isManualPlaying,
   onManualPlayToggle,
+  compact = false,
 }: DeviceControlPanelProps) => {
   const handleRangeChange = (offset: number, limit: number) => {
     onOptionsChange({
@@ -123,7 +125,13 @@ export const DeviceControlPanel = ({
         </span>
       </div>
 
-      <div className={clsx('grid', 'grid-cols-[240px_1fr]', 'gap-12')}>
+      <div
+        className={clsx(
+          compact
+            ? ['grid', 'grid-cols-1', 'gap-4']
+            : ['grid', 'grid-cols-[240px_1fr]', 'gap-12'],
+        )}
+      >
         <div className={clsx('grid', 'gap-4', 'w-60')}>
           <div className={clsx('grid', 'gap-3')}>
             <div className={clsx('text-sm', 'font-medium')}>Speed</div>
