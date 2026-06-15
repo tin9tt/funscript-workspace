@@ -1,15 +1,25 @@
 'use client'
 
+import { useState } from 'react'
 import { usePlayback } from './_hooks/playback'
 import { FileSelector } from './_components/FileSelector'
-import { MediaPlayer } from './_components/MediaPlayer'
-import { FunscriptGraph } from './_components/FunscriptGraph'
+import {
+  FunscriptGraph,
+  type EditGraphDisplayMode,
+  type SpectrogramChannelMode,
+} from './_components/FunscriptGraph'
 import { useRealtimeEdit } from './_hooks/realtimeEdit/useRealtimeEdit'
 import { useLocalStoragePersistence } from './_hooks/localStoragePersistence/useLocalStoragePersistence'
+import { ToggleSwitch } from '../_components/common'
+import { MediaPlayer } from './_components/MediaPlayer'
 import { Controls } from './_components/Controls'
 
 export default function EditPage() {
   const { isPlaying, currentTime } = usePlayback()
+  const [graphDisplayMode, setGraphDisplayMode] =
+    useState<EditGraphDisplayMode>('waveform')
+  const [spectrogramChannelMode, setSpectrogramChannelMode] =
+    useState<SpectrogramChannelMode>('both')
 
   const { type: currentJobType } = useRealtimeEdit({
     isPlaying,
@@ -29,8 +39,45 @@ export default function EditPage() {
 
       {/* グラフエリア */}
       <div data-graph-container className="space-y-4">
-        <h2 className="text-xl font-semibold">編集グラフ</h2>
-        <FunscriptGraph currentJobStateType={currentJobType} />
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">編集グラフ</h2>
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <span>波形</span>
+              <ToggleSwitch
+                checked={graphDisplayMode === 'spectrum'}
+                onChange={(checked) =>
+                  setGraphDisplayMode(checked ? 'spectrum' : 'waveform')
+                }
+              />
+              <span>スペクトラム</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span>音声</span>
+              <select
+                value={spectrogramChannelMode}
+                onChange={(event) =>
+                  setSpectrogramChannelMode(
+                    event.target.value as SpectrogramChannelMode,
+                  )
+                }
+                disabled={graphDisplayMode !== 'spectrum'}
+                className="px-2 py-1 rounded border border-gray-300 bg-white disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <option value="both">両方</option>
+                <option value="left">左のみ</option>
+                <option value="center">中央</option>
+                <option value="right">右のみ</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <FunscriptGraph
+          currentJobStateType={currentJobType}
+          displayMode={graphDisplayMode}
+          spectrogramChannelMode={spectrogramChannelMode}
+        />
 
         {/* 操作ガイド */}
         <div className="p-4 rounded-lg text-sm space-y-2">

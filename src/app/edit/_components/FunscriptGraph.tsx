@@ -7,11 +7,174 @@ import WaveSurfer from 'wavesurfer.js'
 import { calculateSpeed, isSpeedInRange } from '@/lib/funscript'
 
 const VIEWPORT_TIME_RANGE = 10 // 再生時刻の前後10秒を表示
+const SPECTROGRAM_TIME_SLICES = 384
+const SPECTROGRAM_FFT_SIZE = 2048
+const SPECTROGRAM_FREQ_BINS = 256
+const SPECTROGRAM_CEILING_DB = -25
+const SPECTROGRAM_DYNAMIC_RANGE_DB = 80
+const SPECTROGRAM_Y_SCALE_GAMMA = 0.78
+
+export type EditGraphDisplayMode = 'waveform' | 'spectrum'
+export type SpectrogramChannelMode = 'both' | 'left' | 'center' | 'right'
+
+const computeFftMagnitudes = (
+  channel: number[] | Float32Array,
+  centerIndex: number,
+  fftSize: number,
+  targetBins: number[],
+  scratchReal: Float32Array,
+  scratchImag: Float32Array,
+  scratchWindowed: Float32Array,
+) => {
+  const half = Math.floor(fftSize / 2)
+  for (let i = 0; i < fftSize; i++) {
+    const sourceIndex = centerIndex - half + i
+    let sample = 0
+    if (sourceIndex >= 0 && sourceIndex < channel.length) {
+      sample = channel[sourceIndex]
+    }
+    const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
+    scratchWindowed[i] = sample * hann
+  }
+
+  const nyquistBinCount = Math.floor(fftSize / 2)
+  scratchReal.set(scratchWindowed)
+  scratchImag.fill(0)
+
+  // In-place radix-2 Cooley-Tukey FFT
+  let j = 0
+  for (let i = 1; i < fftSize; i++) {
+    let bit = fftSize >> 1
+    while (j & bit) {
+      j ^= bit
+      bit >>= 1
+    }
+    j ^= bit
+    if (i < j) {
+      const tempReal = scratchReal[i]
+      scratchReal[i] = scratchReal[j]
+      scratchReal[j] = tempReal
+      const tempImag = scratchImag[i]
+      scratchImag[i] = scratchImag[j]
+      scratchImag[j] = tempImag
+    }
+  }
+
+  for (let len = 2; len <= fftSize; len <<= 1) {
+    const angle = (-2 * Math.PI) / len
+    const wLenReal = Math.cos(angle)
+    const wLenImag = Math.sin(angle)
+
+    for (let i = 0; i < fftSize; i += len) {
+      let wReal = 1
+      let wImag = 0
+
+      for (let k = 0; k < len / 2; k++) {
+        const uReal = scratchReal[i + k]
+        const uImag = scratchImag[i + k]
+        const vReal =
+          scratchReal[i + k + len / 2] * wReal -
+          scratchImag[i + k + len / 2] * wImag
+        const vImag =
+          scratchReal[i + k + len / 2] * wImag +
+          scratchImag[i + k + len / 2] * wReal
+
+        scratchReal[i + k] = uReal + vReal
+        scratchImag[i + k] = uImag + vImag
+        scratchReal[i + k + len / 2] = uReal - vReal
+        scratchImag[i + k + len / 2] = uImag - vImag
+
+        const nextWReal = wReal * wLenReal - wImag * wLenImag
+        const nextWImag = wReal * wLenImag + wImag * wLenReal
+        wReal = nextWReal
+        wImag = nextWImag
+      }
+    }
+  }
+
+  targetBins.length = nyquistBinCount
+  for (let bin = 0; bin < nyquistBinCount; bin++) {
+    targetBins[bin] = Math.sqrt(
+      scratchReal[bin] * scratchReal[bin] + scratchImag[bin] * scratchImag[bin],
+    )
+  }
+}
+
+const computeMergedFftMagnitudes = (
+  leftChannel: number[] | Float32Array,
+  rightChannel: number[] | Float32Array,
+  centerIndex: number,
+  fftSize: number,
+  targetBins: number[],
+  scratchReal: Float32Array,
+  scratchImag: Float32Array,
+  scratchWindowed: Float32Array,
+  tempLeftBins: number[],
+  tempRightBins: number[],
+) => {
+  computeFftMagnitudes(
+    leftChannel,
+    centerIndex,
+    fftSize,
+    tempLeftBins,
+    scratchReal,
+    scratchImag,
+    scratchWindowed,
+  )
+  computeFftMagnitudes(
+    rightChannel,
+    centerIndex,
+    fftSize,
+    tempRightBins,
+    scratchReal,
+    scratchImag,
+    scratchWindowed,
+  )
+
+  const length = Math.min(tempLeftBins.length, tempRightBins.length)
+  targetBins.length = length
+  for (let i = 0; i < length; i++) {
+    targetBins[i] = Math.max(tempLeftBins[i], tempRightBins[i])
+  }
+}
+
+const getSpectrogramColor = (normalized: number) => {
+  const value = Math.max(0, Math.min(1, normalized))
+
+  const stops = [
+    { at: 0, rgb: [8, 4, 20] },
+    { at: 0.2, rgb: [34, 13, 84] },
+    { at: 0.45, rgb: [116, 41, 132] },
+    { at: 0.68, rgb: [196, 78, 104] },
+    { at: 0.86, rgb: [247, 148, 85] },
+    { at: 1, rgb: [252, 238, 179] },
+  ] as const
+
+  const upperIndex = stops.findIndex((stop) => value <= stop.at)
+  if (upperIndex <= 0) {
+    const [r, g, b] = stops[0].rgb
+    return `rgb(${r}, ${g}, ${b})`
+  }
+
+  const lower = stops[upperIndex - 1]
+  const upper = stops[upperIndex]
+  const ratio = (value - lower.at) / (upper.at - lower.at)
+
+  const r = Math.round(lower.rgb[0] + (upper.rgb[0] - lower.rgb[0]) * ratio)
+  const g = Math.round(lower.rgb[1] + (upper.rgb[1] - lower.rgb[1]) * ratio)
+  const b = Math.round(lower.rgb[2] + (upper.rgb[2] - lower.rgb[2]) * ratio)
+
+  return `rgb(${r}, ${g}, ${b})`
+}
 
 export const FunscriptGraph = ({
   currentJobStateType,
+  displayMode,
+  spectrogramChannelMode,
 }: {
   currentJobStateType: JobStateType
+  displayMode: EditGraphDisplayMode
+  spectrogramChannelMode: SpectrogramChannelMode
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -23,6 +186,22 @@ export const FunscriptGraph = ({
 
   const [peaks, setPeaks] = useState<(number[] | Float32Array)[] | null>(null)
   const [duration, setDuration] = useState<number>(0)
+  const [decodedAudioData, setDecodedAudioData] = useState<{
+    sampleRate: number
+    leftData: Float32Array
+    rightData: Float32Array
+    centerData: Float32Array
+  } | null>(null)
+  const lastSpectrogramStateRef = useRef<{
+    startTimeSec: number
+    width: number
+    height: number
+    columnCount: number
+    columnPixelWidth: number
+    channelMode: SpectrogramChannelMode
+  } | null>(null)
+  const spectrogramColumnRemainderRef = useRef(0)
+  const spectrogramShiftBufferRef = useRef<HTMLCanvasElement | null>(null)
 
   const canEqualize = useMemo(() => {
     const indices = [...edit.selectedIndices].sort((a, b) => a - b)
@@ -53,7 +232,13 @@ export const FunscriptGraph = ({
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
+    let isCancelled = false
+
     if (edit.file) {
+      setDecodedAudioData(null)
+      lastSpectrogramStateRef.current = null
+      spectrogramColumnRemainderRef.current = 0
+      const sourceFile = edit.file
       const url = URL.createObjectURL(edit.file)
       const ws = WaveSurfer.create({
         container: document.createElement('div'),
@@ -61,6 +246,7 @@ export const FunscriptGraph = ({
       })
 
       ws.on('ready', () => {
+        if (isCancelled) return
         const exportedPeaks = ws.exportPeaks()
         setPeaks(exportedPeaks)
         setDuration(ws.getDuration())
@@ -68,18 +254,59 @@ export const FunscriptGraph = ({
         URL.revokeObjectURL(url)
       })
 
+      void (async () => {
+        const audioContext = new AudioContext()
+        try {
+          const arrayBuffer = await sourceFile.arrayBuffer()
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+          if (isCancelled) return
+
+          const leftChannel = audioBuffer.getChannelData(0)
+          const rightChannel =
+            audioBuffer.numberOfChannels > 1
+              ? audioBuffer.getChannelData(1)
+              : leftChannel
+          const leftData = new Float32Array(leftChannel.length)
+          leftData.set(leftChannel)
+          const rightData = new Float32Array(rightChannel.length)
+          rightData.set(rightChannel)
+          const centerData = new Float32Array(audioBuffer.length)
+          for (let i = 0; i < centerData.length; i++) {
+            centerData[i] = (leftData[i] + rightData[i]) / 2
+          }
+
+          setDecodedAudioData({
+            sampleRate: audioBuffer.sampleRate,
+            leftData,
+            rightData,
+            centerData,
+          })
+        } catch (error) {
+          console.error('Failed to decode audio for spectrogram', error)
+          setDecodedAudioData(null)
+        } finally {
+          await audioContext.close()
+        }
+      })()
+
       return () => {
+        isCancelled = true
         ws.destroy()
         URL.revokeObjectURL(url)
       }
     } else {
       setPeaks(null)
       setDuration(0)
+      setDecodedAudioData(null)
+      lastSpectrogramStateRef.current = null
+      spectrogramColumnRemainderRef.current = 0
     }
   }, [edit.file])
 
-  // 波形を描画（再生時刻の前後10秒）
+  // 波形背景を描画
   useEffect(() => {
+    if (displayMode !== 'waveform') return
+
     const canvas = waveformCanvasRef.current
     const container = containerRef.current
     if (!canvas || !container || !peaks || duration === 0) return
@@ -100,7 +327,6 @@ export const FunscriptGraph = ({
 
     // 描画範囲：再生時刻の前後10秒（必ず20秒幅）
     const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
-    const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
     const viewDuration = VIEWPORT_TIME_RANGE * 2 // 常に20秒
 
     const { width, height } = canvas
@@ -171,7 +397,254 @@ export const FunscriptGraph = ({
         ctx.fillRect(i, bottomY, 1, bottomBarHeight)
       }
     }
-  }, [peaks, duration, edit.currentTime])
+  }, [displayMode, duration, edit.currentTime, peaks])
+
+  // スペクトラム背景を描画
+  useEffect(() => {
+    if (displayMode !== 'spectrum') return
+    if (!decodedAudioData || duration === 0) return
+
+    const canvas = waveformCanvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const containerWidth = container.clientWidth
+    const width = containerWidth
+    const height = 256
+    const currentTimeSec = edit.currentTime / 1000
+    const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width
+      canvas.height = height
+    }
+
+    const viewDuration = VIEWPORT_TIME_RANGE * 2
+    const leftChannel = decodedAudioData.leftData
+    const rightChannel = decodedAudioData.rightData
+    const centerChannel = decodedAudioData.centerData
+    const sampleRate = decodedAudioData.sampleRate
+    const audioDurationSec = centerChannel.length / sampleRate
+
+    const preferredColumnCount = Math.min(SPECTROGRAM_TIME_SLICES, width)
+    const columnPixelWidth = Math.max(
+      1,
+      Math.floor(width / Math.max(1, preferredColumnCount)),
+    )
+    const columnCount = Math.max(1, Math.floor(width / columnPixelWidth))
+    const spectrogramWidth = columnCount * columnPixelWidth
+    const rowCount = SPECTROGRAM_FREQ_BINS
+
+    const scratchWindowed = new Float32Array(SPECTROGRAM_FFT_SIZE)
+    const scratchReal = new Float32Array(SPECTROGRAM_FFT_SIZE)
+    const scratchImag = new Float32Array(SPECTROGRAM_FFT_SIZE)
+    const fftMagnitudes: number[] = []
+    const leftFftMagnitudes: number[] = []
+    const rightFftMagnitudes: number[] = []
+
+    const nyquistBinCount = Math.floor(SPECTROGRAM_FFT_SIZE / 2)
+    const nyquistHz = sampleRate / 2
+    const minFreqHz = 50
+    const maxFreqHz = Math.min(16000, nyquistHz)
+    const rowToBinMap = new Array<number>(rowCount)
+    const rowTopY = new Array<number>(rowCount)
+    const rowBottomY = new Array<number>(rowCount)
+    for (let row = 0; row < rowCount; row++) {
+      const ratio = (row + 0.5) / rowCount
+      const freqHz = minFreqHz * Math.pow(maxFreqHz / minFreqHz, ratio)
+      const bin = Math.round((freqHz / nyquistHz) * (nyquistBinCount - 1))
+      rowToBinMap[row] = Math.max(0, Math.min(nyquistBinCount - 1, bin))
+
+      const topRatio = Math.pow((row + 1) / rowCount, SPECTROGRAM_Y_SCALE_GAMMA)
+      const bottomRatio = Math.pow(row / rowCount, SPECTROGRAM_Y_SCALE_GAMMA)
+      rowTopY[row] = height * (1 - topRatio)
+      rowBottomY[row] = height * (1 - bottomRatio)
+    }
+    const floorDb = SPECTROGRAM_CEILING_DB - SPECTROGRAM_DYNAMIC_RANGE_DB
+
+    const drawSpectrogramColumn = (
+      column: number,
+      baseStartTimeSec: number,
+    ) => {
+      const timeSec = baseStartTimeSec + (column / columnCount) * viewDuration
+      const x = column * columnPixelWidth
+
+      if (timeSec < 0 || timeSec > audioDurationSec) {
+        ctx.fillStyle = getSpectrogramColor(0)
+        ctx.fillRect(x, 0, columnPixelWidth, height)
+        return
+      }
+
+      const centerIndex = Math.floor(timeSec * sampleRate)
+      if (spectrogramChannelMode === 'both') {
+        computeMergedFftMagnitudes(
+          leftChannel,
+          rightChannel,
+          centerIndex,
+          SPECTROGRAM_FFT_SIZE,
+          fftMagnitudes,
+          scratchReal,
+          scratchImag,
+          scratchWindowed,
+          leftFftMagnitudes,
+          rightFftMagnitudes,
+        )
+      } else if (spectrogramChannelMode === 'left') {
+        computeFftMagnitudes(
+          leftChannel,
+          centerIndex,
+          SPECTROGRAM_FFT_SIZE,
+          fftMagnitudes,
+          scratchReal,
+          scratchImag,
+          scratchWindowed,
+        )
+      } else if (spectrogramChannelMode === 'right') {
+        computeFftMagnitudes(
+          rightChannel,
+          centerIndex,
+          SPECTROGRAM_FFT_SIZE,
+          fftMagnitudes,
+          scratchReal,
+          scratchImag,
+          scratchWindowed,
+        )
+      } else {
+        computeFftMagnitudes(
+          centerChannel,
+          centerIndex,
+          SPECTROGRAM_FFT_SIZE,
+          fftMagnitudes,
+          scratchReal,
+          scratchImag,
+          scratchWindowed,
+        )
+      }
+
+      for (let row = 0; row < rowCount; row++) {
+        const magnitude = fftMagnitudes[rowToBinMap[row]]
+        const normalizedMagnitude = magnitude / (SPECTROGRAM_FFT_SIZE / 2)
+        const decibel =
+          normalizedMagnitude > 1e-12
+            ? 20 * Math.log10(normalizedMagnitude)
+            : -120
+        const normalized = Math.max(
+          0,
+          Math.min(1, (decibel - floorDb) / SPECTROGRAM_DYNAMIC_RANGE_DB),
+        )
+        const contrast = Math.pow(normalized, 1.35)
+        const y = rowTopY[row]
+        const barHeight = Math.max(1, rowBottomY[row] - rowTopY[row])
+        ctx.fillStyle = getSpectrogramColor(contrast)
+        ctx.fillRect(x, y, columnPixelWidth, barHeight + 0.5)
+      }
+    }
+
+    const lastState = lastSpectrogramStateRef.current
+    const canScrollReuse =
+      lastState &&
+      lastState.width === width &&
+      lastState.height === height &&
+      lastState.columnCount === columnCount &&
+      lastState.columnPixelWidth === columnPixelWidth &&
+      lastState.channelMode === spectrogramChannelMode
+
+    if (!canScrollReuse) {
+      ctx.clearRect(0, 0, width, height)
+      for (let column = 0; column < columnCount; column++) {
+        drawSpectrogramColumn(column, startTimeSec)
+      }
+      if (spectrogramWidth < width) {
+        ctx.fillStyle = getSpectrogramColor(0)
+        ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
+      }
+      spectrogramColumnRemainderRef.current = 0
+    } else {
+      const deltaSec = startTimeSec - lastState.startTimeSec
+      const deltaColumnsFloat =
+        (deltaSec / viewDuration) * columnCount +
+        spectrogramColumnRemainderRef.current
+      const shiftColumns =
+        deltaColumnsFloat >= 0
+          ? Math.floor(deltaColumnsFloat)
+          : Math.ceil(deltaColumnsFloat)
+      spectrogramColumnRemainderRef.current = deltaColumnsFloat - shiftColumns
+
+      if (shiftColumns !== 0) {
+        if (Math.abs(shiftColumns) >= columnCount) {
+          ctx.clearRect(0, 0, width, height)
+          for (let column = 0; column < columnCount; column++) {
+            drawSpectrogramColumn(column, startTimeSec)
+          }
+          if (spectrogramWidth < width) {
+            ctx.fillStyle = getSpectrogramColor(0)
+            ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
+          }
+        } else {
+          const shiftPixels = shiftColumns * columnPixelWidth
+          if (!spectrogramShiftBufferRef.current) {
+            spectrogramShiftBufferRef.current = document.createElement('canvas')
+          }
+          const bufferCanvas = spectrogramShiftBufferRef.current
+          if (bufferCanvas.width !== width || bufferCanvas.height !== height) {
+            bufferCanvas.width = width
+            bufferCanvas.height = height
+          }
+          const bufferCtx = bufferCanvas.getContext('2d')
+          if (!bufferCtx) return
+
+          bufferCtx.clearRect(0, 0, width, height)
+          bufferCtx.drawImage(canvas, 0, 0)
+
+          ctx.clearRect(0, 0, width, height)
+          ctx.imageSmoothingEnabled = false
+          ctx.drawImage(bufferCanvas, -shiftPixels, 0)
+
+          if (shiftColumns > 0) {
+            const redrawStart = columnCount - shiftColumns
+            ctx.clearRect(
+              spectrogramWidth - shiftPixels,
+              0,
+              shiftPixels,
+              height,
+            )
+            for (let column = redrawStart; column < columnCount; column++) {
+              drawSpectrogramColumn(column, startTimeSec)
+            }
+          } else {
+            const redrawEnd = -shiftColumns
+            const redrawWidth = -shiftPixels
+            ctx.clearRect(0, 0, redrawWidth, height)
+            for (let column = 0; column < redrawEnd; column++) {
+              drawSpectrogramColumn(column, startTimeSec)
+            }
+          }
+          if (spectrogramWidth < width) {
+            ctx.fillStyle = getSpectrogramColor(0)
+            ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
+          }
+        }
+      }
+    }
+
+    lastSpectrogramStateRef.current = {
+      startTimeSec,
+      width,
+      height,
+      columnCount,
+      columnPixelWidth,
+      channelMode: spectrogramChannelMode,
+    }
+  }, [
+    decodedAudioData,
+    displayMode,
+    duration,
+    edit.currentTime,
+    spectrogramChannelMode,
+  ])
 
   // グラフを描画（再生時刻の前後10秒）
   useEffect(() => {
@@ -435,7 +908,7 @@ export const FunscriptGraph = ({
         ref={containerRef}
         className="w-full h-64 rounded-lg relative bg-white overflow-hidden"
       >
-        {/* 波形表示用のCanvas */}
+        {/* 波形/スペクトラム表示用のCanvas */}
         <canvas
           ref={waveformCanvasRef}
           className="absolute inset-0 pointer-events-none"
