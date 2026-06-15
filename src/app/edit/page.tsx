@@ -51,6 +51,8 @@ export default function EditPage() {
                 <li>Alt/Option + クリック: 複数選択</li>
                 <li>スクロール / J/K: 上下移動</li>
                 <li>Alt + スクロール / J/K: 拡大/縮小</li>
+                <li>Ctrl/Cmd + C: 連続選択した点をコピー</li>
+                <li>Ctrl/Cmd + V: 貼り付け</li>
                 <li>Delete / Backspace: 削除</li>
               </ul>
             </div>

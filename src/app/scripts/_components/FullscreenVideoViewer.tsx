@@ -19,8 +19,7 @@ export const FullscreenVideoViewer = ({ file, overlayProps }: Props) => {
   const [isOverlayOpen, setIsOverlayOpen] = useState(false)
 
   const hasOverlayContent =
-    overlayProps &&
-    (overlayProps.hasConnectedDevice || overlayProps.hasScript)
+    overlayProps && (overlayProps.hasConnectedDevice || overlayProps.hasScript)
 
   const handleClose = () => {
     setIsOverlayOpen(false)

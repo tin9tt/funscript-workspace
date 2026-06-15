@@ -24,6 +24,13 @@ export const useActions = (
     [dispatch],
   )
 
+  const addActions = useCallback(
+    (actions: FunscriptAction[]) => {
+      dispatch({ kind: 'add-many', payload: { actions } })
+    },
+    [dispatch],
+  )
+
   const updateAction = useCallback(
     (index: number, action: FunscriptAction) => {
       dispatch({ kind: 'update', payload: { index, action } })
@@ -87,6 +94,7 @@ export const useActions = (
     history: state.history,
     loadActions,
     addAction,
+    addActions,
     updateAction,
     deleteActions,
     deleteLastAddedAction,

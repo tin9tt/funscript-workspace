@@ -14,6 +14,7 @@ export interface ActionsState {
 export type ActionsAction =
   | { kind: 'load'; payload: { actions: FunscriptAction[] } }
   | { kind: 'add'; payload: { action: FunscriptAction } }
+  | { kind: 'add-many'; payload: { actions: FunscriptAction[] } }
   | { kind: 'update'; payload: { index: number; action: FunscriptAction } }
   | { kind: 'delete'; payload: { indices: number[] } }
   | { kind: 'delete-last' }
@@ -98,6 +99,14 @@ const actionsReducer = (
 
     case 'add': {
       const newActions = [...state.actions, action.payload.action].sort(
+        (a, b) => a.at - b.at,
+      )
+      return saveToHistory(state, newActions)
+    }
+
+    case 'add-many': {
+      if (action.payload.actions.length === 0) return state
+      const newActions = [...state.actions, ...action.payload.actions].sort(
         (a, b) => a.at - b.at,
       )
       return saveToHistory(state, newActions)

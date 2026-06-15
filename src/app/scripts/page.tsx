@@ -391,7 +391,10 @@ export default function Scripts() {
           />
         )}
         {tracks[0]?.kind !== 'video' && images.length > 0 && (
-          <ImageCarousel images={images} overlayProps={fullscreenOverlayProps} />
+          <ImageCarousel
+            images={images}
+            overlayProps={fullscreenOverlayProps}
+          />
         )}
         {tracks[0]?.kind === 'video' && (
           <FullscreenVideoViewer
