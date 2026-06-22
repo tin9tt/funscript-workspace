@@ -118,40 +118,42 @@ export const OptionsPane = ({
           width: isExpanded ? '256px' : '0px',
         }}
       >
-        <Card className={clsx('p-4', 'space-y-6', 'w-64', 'ml-auto')}>
+        <Card className={clsx('p-4', 'space-y-4', 'w-64', 'ml-auto')}>
           <div className={clsx('text-lg', 'font-semibold')}>Script Options</div>
 
-          {/* Invert Toggle */}
-          <div className={clsx('space-y-3')}>
-            <label className={clsx('text-sm', 'font-medium')}>
-              Invert Script
-            </label>
-            <div className={clsx('flex', 'items-center', 'space-x-3')}>
-              <ToggleSwitch
-                checked={options.inverted}
-                onChange={handleInvertToggle}
+          {/* Row: Invert Toggle + Range Slider side by side */}
+          <div className={clsx('grid', 'grid-cols-2', 'gap-3')}>
+            {/* Invert Toggle */}
+            <div className={clsx('space-y-2')}>
+              <label className={clsx('text-sm', 'font-medium')}>
+                Invert Script
+              </label>
+              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                <ToggleSwitch
+                  checked={options.inverted}
+                  onChange={handleInvertToggle}
+                  disabled={isPlaying}
+                />
+                <span className={clsx('text-xs', 'text-gray-600')}>
+                  {options.inverted ? 'On' : 'Off'}
+                </span>
+              </div>
+            </div>
+
+            {/* Range Slider */}
+            <div className={clsx('space-y-2')}>
+              <label className={clsx('text-sm', 'font-medium')}>Range</label>
+              <VerticalRangeSlider
+                offsetValue={options.range.offset}
+                limitValue={options.range.limit}
+                onChange={handleRangeChange}
                 disabled={isPlaying}
+                hideValues
               />
-              <span className={clsx('text-sm', 'text-gray-600')}>
-                {options.inverted ? 'Inverted' : 'Normal'}
-              </span>
             </div>
           </div>
 
-          {/* Range Slider */}
-          <div className={clsx('space-y-3')}>
-            <label className={clsx('text-sm', 'font-medium')}>
-              Range Settings
-            </label>
-            <VerticalRangeSlider
-              offsetValue={options.range.offset}
-              limitValue={options.range.limit}
-              onChange={handleRangeChange}
-              disabled={isPlaying}
-            />
-          </div>
-
-          {/* Timing Offset */}
+          {/* Timing Offset — full width */}
           <div className={clsx('space-y-3')}>
             <label className={clsx('text-sm', 'font-medium')}>
               Script Offset

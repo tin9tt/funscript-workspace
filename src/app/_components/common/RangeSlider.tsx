@@ -6,11 +6,13 @@ export const VerticalRangeSlider = ({
   limitValue,
   onChange,
   disabled = false,
+  hideValues = false,
 }: {
   offsetValue: number
   limitValue: number
   onChange: (offset: number, limit: number) => void
   disabled?: boolean
+  hideValues?: boolean
 }) => {
   const sliderRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState<'offset' | 'limit' | null>(null)
@@ -122,12 +124,14 @@ export const VerticalRangeSlider = ({
       </div>
 
       {/* Values display */}
-      <div className={clsx('flex', 'flex-col', 'space-y-2', 'text-sm')}>
-        <div className={clsx('text-gray-600')}>
-          <div>Limit: {limitValue}</div>
-          <div>Offset: {offsetValue}</div>
+      {!hideValues && (
+        <div className={clsx('flex', 'flex-col', 'space-y-2', 'text-sm')}>
+          <div className={clsx('text-gray-600')}>
+            <div>Limit: {limitValue}</div>
+            <div>Offset: {offsetValue}</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
