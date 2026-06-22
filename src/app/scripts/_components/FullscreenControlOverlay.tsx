@@ -9,6 +9,8 @@ import type { OptionsState } from './OptionsPane'
 export type FullscreenOverlayProps = {
   options: OptionsState
   onOptionsChange: (options: OptionsState) => void
+  timingOffsetMs: number
+  onTimingOffsetChange: (ms: number) => void
   isMediaPlaying: boolean
   onPlayToggle: () => void
   isManualPlaying: boolean
@@ -24,6 +26,8 @@ type Props = FullscreenOverlayProps & {
 export const FullscreenControlOverlay = ({
   options,
   onOptionsChange,
+  timingOffsetMs,
+  onTimingOffsetChange,
   isMediaPlaying,
   onPlayToggle,
   isManualPlaying,
@@ -142,6 +146,84 @@ export const FullscreenControlOverlay = ({
                 onChange={handleRangeChange}
                 disabled={isMediaPlaying}
               />
+            </div>
+
+            <div className={clsx('space-y-3')}>
+              <div className={clsx('text-sm', 'font-medium')}>
+                Script Offset
+              </div>
+              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                <input
+                  type="number"
+                  min={-600}
+                  max={600}
+                  value={timingOffsetMs}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10)
+                    if (!isNaN(v)) {
+                      onTimingOffsetChange(Math.max(-600, Math.min(600, v)))
+                    }
+                  }}
+                  disabled={isMediaPlaying}
+                  className={clsx(
+                    'w-20',
+                    'rounded',
+                    'border',
+                    'border-white/30',
+                    'bg-white/10',
+                    'px-2',
+                    'py-1',
+                    'text-center',
+                    'text-sm',
+                    'text-white',
+                    'focus:outline-none',
+                    'focus:ring-1',
+                    'focus:ring-white/50',
+                    isMediaPlaying && 'opacity-50 cursor-not-allowed',
+                  )}
+                />
+                <span className={clsx('text-sm', 'text-white/60')}>ms</span>
+              </div>
+              <div className={clsx('grid', 'grid-cols-4', 'gap-1')}>
+                {(
+                  [
+                    { label: '−200', delta: -200 },
+                    { label: '−20', delta: -20 },
+                    { label: '+20', delta: 20 },
+                    { label: '+200', delta: 200 },
+                  ] as const
+                ).map(({ label, delta }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() =>
+                      onTimingOffsetChange(
+                        Math.max(-600, Math.min(600, timingOffsetMs + delta)),
+                      )
+                    }
+                    disabled={
+                      isMediaPlaying ||
+                      (delta < 0 && timingOffsetMs <= -600) ||
+                      (delta > 0 && timingOffsetMs >= 600)
+                    }
+                    className={clsx(
+                      'rounded',
+                      'border',
+                      'border-white/20',
+                      'px-1',
+                      'py-1',
+                      'text-xs',
+                      'transition-colors',
+                      'hover:border-white/50',
+                      'hover:bg-white/10',
+                      'disabled:opacity-50',
+                      'disabled:cursor-not-allowed',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {isMediaPlaying && (

@@ -21,6 +21,8 @@ export interface OptionsState {
 interface OptionsPaneProps {
   options: OptionsState
   onOptionsChange: (options: OptionsState) => void
+  timingOffsetMs: number
+  onTimingOffsetChange: (ms: number) => void
   className?: string
   isPlaying?: boolean
   onPaneOpen?: () => void
@@ -31,6 +33,8 @@ interface OptionsPaneProps {
 export const OptionsPane = ({
   options,
   onOptionsChange,
+  timingOffsetMs,
+  onTimingOffsetChange,
   className,
   isPlaying = false,
   onPaneOpen,
@@ -145,6 +149,83 @@ export const OptionsPane = ({
               onChange={handleRangeChange}
               disabled={isPlaying}
             />
+          </div>
+
+          {/* Timing Offset */}
+          <div className={clsx('space-y-3')}>
+            <label className={clsx('text-sm', 'font-medium')}>
+              Script Offset
+            </label>
+            <div className={clsx('flex', 'items-center', 'gap-2')}>
+              <input
+                type="number"
+                min={-600}
+                max={600}
+                value={timingOffsetMs}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10)
+                  if (!isNaN(v)) {
+                    onTimingOffsetChange(Math.max(-600, Math.min(600, v)))
+                  }
+                }}
+                disabled={isPlaying}
+                className={clsx(
+                  'w-20',
+                  'rounded',
+                  'border',
+                  'border-primary-content',
+                  'bg-transparent',
+                  'px-2',
+                  'py-1',
+                  'text-center',
+                  'text-sm',
+                  'focus:outline-none',
+                  'focus:ring-1',
+                  'focus:ring-primary-variant',
+                  isPlaying && 'opacity-50 cursor-not-allowed',
+                )}
+              />
+              <span className={clsx('text-sm', 'text-gray-500')}>ms</span>
+            </div>
+            <div className={clsx('grid', 'grid-cols-4', 'gap-1')}>
+              {(
+                [
+                  { label: '−200', delta: -200 },
+                  { label: '−20', delta: -20 },
+                  { label: '+20', delta: 20 },
+                  { label: '+200', delta: 200 },
+                ] as const
+              ).map(({ label, delta }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() =>
+                    onTimingOffsetChange(
+                      Math.max(-600, Math.min(600, timingOffsetMs + delta)),
+                    )
+                  }
+                  disabled={
+                    isPlaying ||
+                    (delta < 0 && timingOffsetMs <= -600) ||
+                    (delta > 0 && timingOffsetMs >= 600)
+                  }
+                  className={clsx(
+                    'rounded',
+                    'border',
+                    'border-primary-content',
+                    'px-1',
+                    'py-1',
+                    'text-xs',
+                    'transition-colors',
+                    'hover:border-primary-variant',
+                    'disabled:opacity-50',
+                    'disabled:cursor-not-allowed',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {isPlaying && (

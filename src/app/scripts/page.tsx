@@ -12,6 +12,7 @@ import { useSeekContext } from './_hooks/seek'
 import { OptionsPane, OptionsState } from './_components/OptionsPane'
 import { useScriptInvert } from './_hooks/fileWithLinearOptions/invert/hook'
 import { useScriptRange } from './_hooks/fileWithLinearOptions/range/hook'
+import { useScriptTimingOffset } from './_hooks/fileWithLinearOptions/timingOffset/hook'
 import { HorizontalRangeSlider, ToggleSwitch } from '../_components/common'
 import { TrackAudio, TrackVideo } from './_hooks/file/reducer'
 import { DeviceControlPanel } from './_components/DeviceControlPanel'
@@ -129,6 +130,42 @@ const useLoopOption = (fileId: string, duration: number) => {
   return { loopRange, saveLoopRange }
 }
 
+const useTimingOffsetOption = (fileId: string) => {
+  const STORAGE_KEY = 'timing-offset-' + fileId
+
+  const [timingOffsetMs, setTimingOffsetMs] = useState(0)
+
+  useEffect(() => {
+    if (!fileId) return
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored !== null) {
+        const parsed = parseInt(stored, 10)
+        if (!isNaN(parsed)) {
+          setTimingOffsetMs(Math.max(-600, Math.min(600, parsed)))
+          return
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load timing offset from localStorage:', error)
+    }
+    setTimingOffsetMs(0)
+  }, [STORAGE_KEY, fileId])
+
+  const saveTimingOffsetMs = (ms: number) => {
+    const clamped = Math.max(-600, Math.min(600, ms))
+    setTimingOffsetMs(clamped)
+    if (!fileId) return
+    try {
+      localStorage.setItem(STORAGE_KEY, String(clamped))
+    } catch (error) {
+      console.warn('Failed to save timing offset to localStorage:', error)
+    }
+  }
+
+  return { timingOffsetMs, saveTimingOffsetMs }
+}
+
 const useDebouncedValue = <T,>(value: T, delayMs: number): T => {
   const [debounced, setDebounced] = useState(value)
 
@@ -168,8 +205,12 @@ const useFile = (duration: number) => {
     generateFileId(track?.file),
     duration,
   )
+  const { timingOffsetMs, saveTimingOffsetMs } = useTimingOffsetOption(
+    generateFileId(track?.file),
+  )
   const invertedTracks = useScriptInvert({ tracks, images }, options.inverted)
-  const finalTracks = useScriptRange(invertedTracks, options.range)
+  const rangeTracks = useScriptRange(invertedTracks, options.range)
+  const finalTracks = useScriptTimingOffset(rangeTracks, timingOffsetMs)
   return {
     ...finalTracks,
     images,
@@ -178,6 +219,8 @@ const useFile = (duration: number) => {
     saveOption,
     loopRange,
     saveLoopRange,
+    timingOffsetMs,
+    saveTimingOffsetMs,
   }
 }
 
@@ -216,6 +259,8 @@ export default function Scripts() {
     saveOption,
     loopRange,
     saveLoopRange,
+    timingOffsetMs,
+    saveTimingOffsetMs,
   } = useFile(duration)
   const hasScript = Boolean(tracks[0]?.script)
   hasScriptRef.current = hasScript
@@ -369,6 +414,8 @@ export default function Scripts() {
   const fullscreenOverlayProps = {
     options: option,
     onOptionsChange: saveOption,
+    timingOffsetMs,
+    onTimingOffsetChange: saveTimingOffsetMs,
     isMediaPlaying: isPlaying,
     onPlayToggle: isPlaying ? pause : play,
     isManualPlaying: isManualContinuousPlaying,
@@ -446,6 +493,8 @@ export default function Scripts() {
                 <OptionsPane
                   options={option}
                   onOptionsChange={saveOption}
+                  timingOffsetMs={timingOffsetMs}
+                  onTimingOffsetChange={saveTimingOffsetMs}
                   isPlaying={isPlaying}
                   onPaneOpen={handlePaneOpen}
                   isExpanded={isPaneExpanded}
