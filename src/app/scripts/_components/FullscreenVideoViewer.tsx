@@ -1,7 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FiMaximize2, FiMinimize2, FiSettings } from 'react-icons/fi'
 import { VideoViewer } from './Video'
 import {
@@ -17,37 +17,43 @@ type Props = {
 export const FullscreenVideoViewer = ({ file, overlayProps }: Props) => {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isOverlayOpen, setIsOverlayOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const hasOverlayContent =
     overlayProps && (overlayProps.hasConnectedDevice || overlayProps.hasScript)
 
-  const handleClose = () => {
-    setIsOverlayOpen(false)
-    setIsFullscreen(false)
+  const handleEnterFullscreen = () => {
+    containerRef.current?.requestFullscreen()
   }
 
-  // Escape key: dismiss overlay first, then exit fullscreen
-  useEffect(() => {
-    if (!isFullscreen) return
+  const handleExitFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen()
+  }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (isOverlayOpen) {
-        setIsOverlayOpen(false)
-      } else {
-        setIsFullscreen(false)
-      }
+  const handleClose = () => {
+    setIsOverlayOpen(false)
+    handleExitFullscreen()
+  }
+
+  // Sync React state with browser fullscreen state (handles Escape key exit too)
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const active = document.fullscreenElement === containerRef.current
+      setIsFullscreen(active)
+      if (!active) setIsOverlayOpen(false)
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isFullscreen, isOverlayOpen])
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () =>
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
 
   return (
     <div
+      ref={containerRef}
       className={clsx(
         isFullscreen
-          ? ['fixed', 'inset-0', 'z-50', 'bg-black']
+          ? ['bg-black', 'h-full', 'w-full']
           : ['relative', 'flex', 'justify-center'],
       )}
     >
@@ -72,7 +78,7 @@ export const FullscreenVideoViewer = ({ file, overlayProps }: Props) => {
             'p-2',
             'text-white',
           )}
-          onClick={() => setIsFullscreen(true)}
+          onClick={handleEnterFullscreen}
           aria-label="Open video fullscreen"
         >
           <FiMaximize2 size={18} />
