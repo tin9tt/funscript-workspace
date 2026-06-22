@@ -1,7 +1,7 @@
 'use client'
 
 import clsx from 'clsx'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FiChevronLeft, FiChevronRight, FiSettings, FiX } from 'react-icons/fi'
 import { useImageViewer } from '../_hooks/useImageViewer'
 import {
@@ -35,14 +35,32 @@ export const FullscreenImageViewer = ({
   const canNavigate = images.length > 1
 
   const [isOverlayOpen, setIsOverlayOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Reset overlay state when viewer closes (Fix: prevent overlay reappearing on next open)
+  // Reset overlay state when viewer closes
   useEffect(() => {
     if (!isOpen) setIsOverlayOpen(false)
   }, [isOpen])
 
-  const [containerElement, setContainerElement] =
-    useState<HTMLDivElement | null>(null)
+  // Enter/exit native fullscreen in sync with isOpen
+  useEffect(() => {
+    if (isOpen) {
+      containerRef.current?.requestFullscreen()
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen()
+    }
+  }, [isOpen])
+
+  // When the browser exits fullscreen (e.g. Escape key), notify parent
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement && isOpen) onClose()
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () =>
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [isOpen, onClose])
+
   const [containerSize, setContainerSize] = useState<Size>({
     width: 0,
     height: 0,
@@ -54,10 +72,12 @@ export const FullscreenImageViewer = ({
     setImageSize({ width: 0, height: 0 })
   }, [currentIndex])
 
-  // Escape key: dismiss overlay first, then close viewer
+  // Escape via useImageViewer: dismiss overlay first, then exit fullscreen
   const handleEscapeClose = useCallback(() => {
     if (isOverlayOpen) {
       setIsOverlayOpen(false)
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen()
     } else {
       onClose()
     }
@@ -72,36 +92,17 @@ export const FullscreenImageViewer = ({
     })
 
   useEffect(() => {
-    if (!containerElement || !isOpen) {
-      return
-    }
+    if (!containerRef.current || !isOpen) return
 
+    const el = containerRef.current
     const updateSize = () => {
-      setContainerSize({
-        width: containerElement.clientWidth,
-        height: containerElement.clientHeight,
-      })
+      setContainerSize({ width: el.clientWidth, height: el.clientHeight })
     }
 
     updateSize()
-
     const observer = new ResizeObserver(updateSize)
-    observer.observe(containerElement)
-
+    observer.observe(el)
     return () => observer.disconnect()
-  }, [containerElement, isOpen])
-
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.body.style.overflow = originalOverflow
-    }
   }, [isOpen])
 
   if (!isOpen || !current) {
@@ -113,7 +114,7 @@ export const FullscreenImageViewer = ({
   const toNext = () => onIndexChange((currentIndex + 1) % images.length)
 
   return (
-    <div className={clsx('fixed', 'inset-0', 'z-50', 'bg-black/90')}>
+    <div ref={containerRef} className={clsx('h-full', 'w-full', 'bg-black/90')}>
       <button
         className={clsx(
           'absolute',
@@ -127,7 +128,7 @@ export const FullscreenImageViewer = ({
           'p-3',
           'text-white',
         )}
-        onClick={onClose}
+        onClick={() => document.exitFullscreen()}
         aria-label="Close fullscreen image"
       >
         <FiX size={20} />
@@ -200,7 +201,6 @@ export const FullscreenImageViewer = ({
       )}
 
       <div
-        ref={setContainerElement}
         className={clsx(
           'flex',
           'h-full',
