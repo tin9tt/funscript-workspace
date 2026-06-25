@@ -240,25 +240,73 @@ export const FullscreenImageViewer = ({
       {overlayProps &&
         (overlayProps.hasConnectedDevice || overlayProps.hasScript) &&
         !isOverlayOpen && (
-          <button
-            type="button"
+          <div
             className={clsx(
               'absolute',
               'bottom-4',
               'right-4',
               'z-10',
-              'rounded-full',
-              'border',
-              'border-white/40',
-              'bg-black/40',
-              'p-3',
-              'text-white',
+              'flex',
+              'items-center',
+              'gap-2',
             )}
-            onClick={() => setIsOverlayOpen(true)}
-            aria-label="Open controls"
           >
-            <FiSettings size={20} />
-          </button>
+            {overlayProps.hasConnectedDevice && overlayProps.hasScript && (
+              <button
+                type="button"
+                className={clsx(
+                  'rounded-full',
+                  'border',
+                  'px-3',
+                  'py-2',
+                  'text-xs',
+                  'font-semibold',
+                  'transition-colors',
+                  overlayProps.isDeviceSyncEnabled
+                    ? [
+                        'border-white/60',
+                        'bg-white/20',
+                        'text-white',
+                        'hover:bg-white/30',
+                      ]
+                    : [
+                        'border-white/30',
+                        'bg-black/40',
+                        'text-white/40',
+                        'hover:text-white/70',
+                      ],
+                )}
+                onClick={() =>
+                  overlayProps.onDeviceSyncToggle(
+                    !overlayProps.isDeviceSyncEnabled,
+                  )
+                }
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-label={
+                  overlayProps.isDeviceSyncEnabled
+                    ? 'Disable device sync'
+                    : 'Enable device sync'
+                }
+              >
+                SYNC
+              </button>
+            )}
+            <button
+              type="button"
+              className={clsx(
+                'rounded-full',
+                'border',
+                'border-white/40',
+                'bg-black/40',
+                'p-3',
+                'text-white',
+              )}
+              onClick={() => setIsOverlayOpen(true)}
+              aria-label="Open controls"
+            >
+              <FiSettings size={20} />
+            </button>
+          </div>
         )}
 
       {isOverlayOpen && overlayProps && (
