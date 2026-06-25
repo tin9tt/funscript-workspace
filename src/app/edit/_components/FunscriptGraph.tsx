@@ -8,36 +8,64 @@ import { calculateSpeed, isSpeedInRange } from '@/lib/funscript'
 
 const VIEWPORT_TIME_RANGE = 10 // 再生時刻の前後10秒を表示
 const SPECTROGRAM_TIME_SLICES = 384
-const SPECTROGRAM_FFT_SIZE = 2048
-const SPECTROGRAM_FREQ_BINS = 256
-const SPECTROGRAM_CEILING_DB = -25
+const SPECTROGRAM_WINDOW_SIZE = 2048
+const SPECTROGRAM_FFT_SIZE = 4096
+const SPECTROGRAM_HOP_SIZE = 512
+const SPECTROGRAM_TOP_DB = -5
 const SPECTROGRAM_DYNAMIC_RANGE_DB = 80
-const SPECTROGRAM_Y_SCALE_GAMMA = 0.78
+const SPECTROGRAM_BLACK_FLOOR = 0.1
+const SPECTROGRAM_MIN_FREQ_HZ = 40
 
 export type EditGraphDisplayMode = 'waveform' | 'spectrum'
-export type SpectrogramChannelMode = 'both' | 'left' | 'center' | 'right'
+export type SpectrogramChannelMode =
+  | 'stereo-average'
+  | 'stereo-max'
+  | 'left'
+  | 'center'
+  | 'right'
 
-const computeFftMagnitudes = (
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value))
+
+const yToFrequency = (
+  y: number,
+  height: number,
+  minHz: number,
+  maxHz: number,
+) => {
+  const ratio = 1 - y / Math.max(1, height)
+  return minHz * Math.pow(maxHz / minHz, ratio)
+}
+
+const mapIntensity = (value: number) => {
+  if (value <= SPECTROGRAM_BLACK_FLOOR) {
+    return 0
+  }
+  return (value - SPECTROGRAM_BLACK_FLOOR) / (1 - SPECTROGRAM_BLACK_FLOOR)
+}
+
+const computeFftPowerSpectrum = (
   channel: number[] | Float32Array,
   centerIndex: number,
+  windowSize: number,
   fftSize: number,
-  targetBins: number[],
+  hannWindow: Float32Array,
+  targetBins: Float32Array,
   scratchReal: Float32Array,
   scratchImag: Float32Array,
   scratchWindowed: Float32Array,
 ) => {
-  const half = Math.floor(fftSize / 2)
-  for (let i = 0; i < fftSize; i++) {
-    const sourceIndex = centerIndex - half + i
+  const halfWindow = Math.floor(windowSize / 2)
+  for (let i = 0; i < windowSize; i++) {
+    const sourceIndex = centerIndex - halfWindow + i
     let sample = 0
     if (sourceIndex >= 0 && sourceIndex < channel.length) {
       sample = channel[sourceIndex]
     }
-    const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
-    scratchWindowed[i] = sample * hann
+    scratchWindowed[i] = sample * hannWindow[i]
   }
 
-  const nyquistBinCount = Math.floor(fftSize / 2)
+  scratchReal.fill(0)
   scratchReal.set(scratchWindowed)
   scratchImag.fill(0)
 
@@ -92,48 +120,99 @@ const computeFftMagnitudes = (
     }
   }
 
-  targetBins.length = nyquistBinCount
-  for (let bin = 0; bin < nyquistBinCount; bin++) {
-    targetBins[bin] = Math.sqrt(
-      scratchReal[bin] * scratchReal[bin] + scratchImag[bin] * scratchImag[bin],
-    )
+  const coherentGain = 0.5
+  const nyquistBin = Math.floor(fftSize / 2)
+  const baseScale = 1 / (windowSize * coherentGain)
+  for (let bin = 0; bin <= nyquistBin; bin++) {
+    let magnitude =
+      Math.hypot(scratchReal[bin], scratchImag[bin]) * baseScale * 2
+    if (bin === 0 || bin === nyquistBin) {
+      magnitude *= 0.5
+    }
+    targetBins[bin] = magnitude * magnitude
   }
 }
 
-const computeMergedFftMagnitudes = (
+const computeStereoAveragePowerSpectrum = (
   leftChannel: number[] | Float32Array,
   rightChannel: number[] | Float32Array,
   centerIndex: number,
+  windowSize: number,
   fftSize: number,
-  targetBins: number[],
+  hannWindow: Float32Array,
+  targetBins: Float32Array,
   scratchReal: Float32Array,
   scratchImag: Float32Array,
   scratchWindowed: Float32Array,
-  tempLeftBins: number[],
-  tempRightBins: number[],
+  tempLeftBins: Float32Array,
+  tempRightBins: Float32Array,
 ) => {
-  computeFftMagnitudes(
+  computeFftPowerSpectrum(
     leftChannel,
     centerIndex,
+    windowSize,
     fftSize,
+    hannWindow,
     tempLeftBins,
     scratchReal,
     scratchImag,
     scratchWindowed,
   )
-  computeFftMagnitudes(
+  computeFftPowerSpectrum(
     rightChannel,
     centerIndex,
+    windowSize,
     fftSize,
+    hannWindow,
     tempRightBins,
     scratchReal,
     scratchImag,
     scratchWindowed,
   )
 
-  const length = Math.min(tempLeftBins.length, tempRightBins.length)
-  targetBins.length = length
-  for (let i = 0; i < length; i++) {
+  for (let i = 0; i < targetBins.length; i++) {
+    targetBins[i] = (tempLeftBins[i] + tempRightBins[i]) * 0.5
+  }
+}
+
+const computeStereoMaxPowerSpectrum = (
+  leftChannel: number[] | Float32Array,
+  rightChannel: number[] | Float32Array,
+  centerIndex: number,
+  windowSize: number,
+  fftSize: number,
+  hannWindow: Float32Array,
+  targetBins: Float32Array,
+  scratchReal: Float32Array,
+  scratchImag: Float32Array,
+  scratchWindowed: Float32Array,
+  tempLeftBins: Float32Array,
+  tempRightBins: Float32Array,
+) => {
+  computeFftPowerSpectrum(
+    leftChannel,
+    centerIndex,
+    windowSize,
+    fftSize,
+    hannWindow,
+    tempLeftBins,
+    scratchReal,
+    scratchImag,
+    scratchWindowed,
+  )
+  computeFftPowerSpectrum(
+    rightChannel,
+    centerIndex,
+    windowSize,
+    fftSize,
+    hannWindow,
+    tempRightBins,
+    scratchReal,
+    scratchImag,
+    scratchWindowed,
+  )
+
+  for (let i = 0; i < targetBins.length; i++) {
     targetBins[i] = Math.max(tempLeftBins[i], tempRightBins[i])
   }
 }
@@ -142,12 +221,14 @@ const getSpectrogramColor = (normalized: number) => {
   const value = Math.max(0, Math.min(1, normalized))
 
   const stops = [
-    { at: 0, rgb: [8, 4, 20] },
-    { at: 0.2, rgb: [34, 13, 84] },
-    { at: 0.45, rgb: [116, 41, 132] },
-    { at: 0.68, rgb: [196, 78, 104] },
-    { at: 0.86, rgb: [247, 148, 85] },
-    { at: 1, rgb: [252, 238, 179] },
+    { at: 0, rgb: [0, 0, 0] },
+    { at: 0.1, rgb: [0, 0, 0] },
+    { at: 0.22, rgb: [20, 0, 50] },
+    { at: 0.4, rgb: [70, 10, 130] },
+    { at: 0.58, rgb: [190, 20, 130] },
+    { at: 0.75, rgb: [245, 80, 50] },
+    { at: 0.9, rgb: [255, 190, 40] },
+    { at: 1, rgb: [255, 255, 210] },
   ] as const
 
   const upperIndex = stops.findIndex((stop) => value <= stop.at)
@@ -436,110 +517,169 @@ export const FunscriptGraph = ({
     )
     const columnCount = Math.max(1, Math.floor(width / columnPixelWidth))
     const spectrogramWidth = columnCount * columnPixelWidth
-    const rowCount = SPECTROGRAM_FREQ_BINS
+    const rowCount = height
 
-    const scratchWindowed = new Float32Array(SPECTROGRAM_FFT_SIZE)
+    const scratchWindowed = new Float32Array(SPECTROGRAM_WINDOW_SIZE)
     const scratchReal = new Float32Array(SPECTROGRAM_FFT_SIZE)
     const scratchImag = new Float32Array(SPECTROGRAM_FFT_SIZE)
-    const fftMagnitudes: number[] = []
-    const leftFftMagnitudes: number[] = []
-    const rightFftMagnitudes: number[] = []
+    const nyquistBin = Math.floor(SPECTROGRAM_FFT_SIZE / 2)
+    const fftPowers = new Float32Array(nyquistBin + 1)
+    const leftFftPowers = new Float32Array(nyquistBin + 1)
+    const rightFftPowers = new Float32Array(nyquistBin + 1)
+    const rowAggregatedPowers = new Float32Array(rowCount)
 
-    const nyquistBinCount = Math.floor(SPECTROGRAM_FFT_SIZE / 2)
-    const nyquistHz = sampleRate / 2
-    const minFreqHz = 50
-    const maxFreqHz = Math.min(16000, nyquistHz)
-    const rowToBinMap = new Array<number>(rowCount)
-    const rowTopY = new Array<number>(rowCount)
-    const rowBottomY = new Array<number>(rowCount)
-    for (let row = 0; row < rowCount; row++) {
-      const ratio = (row + 0.5) / rowCount
-      const freqHz = minFreqHz * Math.pow(maxFreqHz / minFreqHz, ratio)
-      const bin = Math.round((freqHz / nyquistHz) * (nyquistBinCount - 1))
-      rowToBinMap[row] = Math.max(0, Math.min(nyquistBinCount - 1, bin))
-
-      const topRatio = Math.pow((row + 1) / rowCount, SPECTROGRAM_Y_SCALE_GAMMA)
-      const bottomRatio = Math.pow(row / rowCount, SPECTROGRAM_Y_SCALE_GAMMA)
-      rowTopY[row] = height * (1 - topRatio)
-      rowBottomY[row] = height * (1 - bottomRatio)
+    const hannWindow = new Float32Array(SPECTROGRAM_WINDOW_SIZE)
+    for (let i = 0; i < SPECTROGRAM_WINDOW_SIZE; i++) {
+      hannWindow[i] =
+        0.5 * (1 - Math.cos((2 * Math.PI * i) / (SPECTROGRAM_WINDOW_SIZE - 1)))
     }
-    const floorDb = SPECTROGRAM_CEILING_DB - SPECTROGRAM_DYNAMIC_RANGE_DB
+
+    const nyquistHz = sampleRate / 2
+    const minFreqHz = SPECTROGRAM_MIN_FREQ_HZ
+    const maxFreqHz = Math.min(16000, nyquistHz)
+    const rowBinStart = new Uint16Array(rowCount)
+    const rowBinEnd = new Uint16Array(rowCount)
+    for (let row = 0; row < rowCount; row++) {
+      const freqTop = yToFrequency(row, rowCount, minFreqHz, maxFreqHz)
+      const freqBottom = yToFrequency(row + 1, rowCount, minFreqHz, maxFreqHz)
+      const start = Math.floor((freqBottom * SPECTROGRAM_FFT_SIZE) / sampleRate)
+      const end = Math.ceil((freqTop * SPECTROGRAM_FFT_SIZE) / sampleRate)
+      rowBinStart[row] = clamp(start, 0, nyquistBin)
+      rowBinEnd[row] = clamp(end, 0, nyquistBin)
+    }
+    const floorDb = SPECTROGRAM_TOP_DB - SPECTROGRAM_DYNAMIC_RANGE_DB
+    const maxFrameIndex = Math.ceil(
+      (audioDurationSec * sampleRate) / SPECTROGRAM_HOP_SIZE,
+    )
 
     const drawSpectrogramColumn = (
       column: number,
       baseStartTimeSec: number,
     ) => {
       const timeSec = baseStartTimeSec + (column / columnCount) * viewDuration
+      const nextTimeSec =
+        baseStartTimeSec + ((column + 1) / columnCount) * viewDuration
       const x = column * columnPixelWidth
 
-      if (timeSec < 0 || timeSec > audioDurationSec) {
+      if (nextTimeSec < 0 || timeSec > audioDurationSec) {
         ctx.fillStyle = getSpectrogramColor(0)
         ctx.fillRect(x, 0, columnPixelWidth, height)
         return
       }
 
-      const centerIndex = Math.floor(timeSec * sampleRate)
-      if (spectrogramChannelMode === 'both') {
-        computeMergedFftMagnitudes(
-          leftChannel,
-          rightChannel,
-          centerIndex,
-          SPECTROGRAM_FFT_SIZE,
-          fftMagnitudes,
-          scratchReal,
-          scratchImag,
-          scratchWindowed,
-          leftFftMagnitudes,
-          rightFftMagnitudes,
-        )
-      } else if (spectrogramChannelMode === 'left') {
-        computeFftMagnitudes(
-          leftChannel,
-          centerIndex,
-          SPECTROGRAM_FFT_SIZE,
-          fftMagnitudes,
-          scratchReal,
-          scratchImag,
-          scratchWindowed,
-        )
-      } else if (spectrogramChannelMode === 'right') {
-        computeFftMagnitudes(
-          rightChannel,
-          centerIndex,
-          SPECTROGRAM_FFT_SIZE,
-          fftMagnitudes,
-          scratchReal,
-          scratchImag,
-          scratchWindowed,
-        )
-      } else {
-        computeFftMagnitudes(
-          centerChannel,
-          centerIndex,
-          SPECTROGRAM_FFT_SIZE,
-          fftMagnitudes,
-          scratchReal,
-          scratchImag,
-          scratchWindowed,
-        )
+      rowAggregatedPowers.fill(0)
+
+      const frameStart = clamp(
+        Math.floor((timeSec * sampleRate) / SPECTROGRAM_HOP_SIZE),
+        0,
+        maxFrameIndex,
+      )
+      const frameEnd = clamp(
+        Math.floor((nextTimeSec * sampleRate) / SPECTROGRAM_HOP_SIZE),
+        0,
+        maxFrameIndex,
+      )
+
+      for (
+        let frame = frameStart;
+        frame <= Math.max(frameStart, frameEnd);
+        frame++
+      ) {
+        const centerIndex = frame * SPECTROGRAM_HOP_SIZE
+        if (spectrogramChannelMode === 'stereo-average') {
+          computeStereoAveragePowerSpectrum(
+            leftChannel,
+            rightChannel,
+            centerIndex,
+            SPECTROGRAM_WINDOW_SIZE,
+            SPECTROGRAM_FFT_SIZE,
+            hannWindow,
+            fftPowers,
+            scratchReal,
+            scratchImag,
+            scratchWindowed,
+            leftFftPowers,
+            rightFftPowers,
+          )
+        } else if (spectrogramChannelMode === 'stereo-max') {
+          computeStereoMaxPowerSpectrum(
+            leftChannel,
+            rightChannel,
+            centerIndex,
+            SPECTROGRAM_WINDOW_SIZE,
+            SPECTROGRAM_FFT_SIZE,
+            hannWindow,
+            fftPowers,
+            scratchReal,
+            scratchImag,
+            scratchWindowed,
+            leftFftPowers,
+            rightFftPowers,
+          )
+        } else if (spectrogramChannelMode === 'left') {
+          computeFftPowerSpectrum(
+            leftChannel,
+            centerIndex,
+            SPECTROGRAM_WINDOW_SIZE,
+            SPECTROGRAM_FFT_SIZE,
+            hannWindow,
+            fftPowers,
+            scratchReal,
+            scratchImag,
+            scratchWindowed,
+          )
+        } else if (spectrogramChannelMode === 'right') {
+          computeFftPowerSpectrum(
+            rightChannel,
+            centerIndex,
+            SPECTROGRAM_WINDOW_SIZE,
+            SPECTROGRAM_FFT_SIZE,
+            hannWindow,
+            fftPowers,
+            scratchReal,
+            scratchImag,
+            scratchWindowed,
+          )
+        } else {
+          computeFftPowerSpectrum(
+            centerChannel,
+            centerIndex,
+            SPECTROGRAM_WINDOW_SIZE,
+            SPECTROGRAM_FFT_SIZE,
+            hannWindow,
+            fftPowers,
+            scratchReal,
+            scratchImag,
+            scratchWindowed,
+          )
+        }
+
+        for (let row = 0; row < rowCount; row++) {
+          const startBin = rowBinStart[row]
+          const endBin = rowBinEnd[row]
+          let sum = 0
+          let count = 0
+          for (let bin = startBin; bin <= endBin; bin++) {
+            sum += fftPowers[bin]
+            count++
+          }
+          const avgPower = sum / Math.max(1, count)
+          if (avgPower > rowAggregatedPowers[row]) {
+            rowAggregatedPowers[row] = avgPower
+          }
+        }
       }
 
       for (let row = 0; row < rowCount; row++) {
-        const magnitude = fftMagnitudes[rowToBinMap[row]]
-        const normalizedMagnitude = magnitude / (SPECTROGRAM_FFT_SIZE / 2)
-        const decibel =
-          normalizedMagnitude > 1e-12
-            ? 20 * Math.log10(normalizedMagnitude)
-            : -120
-        const normalized = Math.max(
+        const pixelDb =
+          10 * Math.log10(Math.max(rowAggregatedPowers[row], 1e-20))
+        const normalized = clamp(
+          (pixelDb - floorDb) / SPECTROGRAM_DYNAMIC_RANGE_DB,
           0,
-          Math.min(1, (decibel - floorDb) / SPECTROGRAM_DYNAMIC_RANGE_DB),
+          1,
         )
-        const contrast = Math.pow(normalized, 1.35)
-        const y = rowTopY[row]
-        const barHeight = Math.max(1, rowBottomY[row] - rowTopY[row])
-        ctx.fillStyle = getSpectrogramColor(contrast)
-        ctx.fillRect(x, y, columnPixelWidth, barHeight + 0.5)
+        ctx.fillStyle = getSpectrogramColor(mapIntensity(normalized))
+        ctx.fillRect(x, row, columnPixelWidth, 1)
       }
     }
 
@@ -679,7 +819,10 @@ export const FunscriptGraph = ({
     const posToY = (pos: number) => canvas.height - (pos / 100) * canvas.height
 
     // グリッド線を描画
-    ctx.strokeStyle = '#f3f4f6'
+    ctx.strokeStyle =
+      displayMode === 'spectrum'
+        ? 'rgba(255, 255, 255, 0.15)'
+        : 'rgba(243, 244, 246, 1)'
     ctx.lineWidth = 1
 
     // 縦方向のグリッド線（1秒ごと）
@@ -700,8 +843,9 @@ export const FunscriptGraph = ({
       }
     }
 
-    // 横方向のグリッド線
-    for (let i = 0; i <= 10; i++) {
+    // 横方向のグリッド線（スペクトログラム表示時は密度を下げる）
+    const horizontalGridStep = displayMode === 'spectrum' ? 2 : 1
+    for (let i = 0; i <= 10; i += horizontalGridStep) {
       const y = (canvas.height / 10) * i
       ctx.beginPath()
       ctx.moveTo(0, y)

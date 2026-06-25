@@ -19,7 +19,7 @@ export default function EditPage() {
   const [graphDisplayMode, setGraphDisplayMode] =
     useState<EditGraphDisplayMode>('waveform')
   const [spectrogramChannelMode, setSpectrogramChannelMode] =
-    useState<SpectrogramChannelMode>('both')
+    useState<SpectrogramChannelMode>('stereo-average')
 
   const { type: currentJobType } = useRealtimeEdit({
     isPlaying,
@@ -65,7 +65,8 @@ export default function EditPage() {
                 disabled={graphDisplayMode !== 'spectrum'}
                 className="px-2 py-1 rounded border border-gray-300 bg-white disabled:bg-gray-100 disabled:text-gray-400"
               >
-                <option value="both">両方</option>
+                <option value="stereo-average">ステレオ平均</option>
+                <option value="stereo-max">ステレオ最大</option>
                 <option value="left">左のみ</option>
                 <option value="center">中央</option>
                 <option value="right">右のみ</option>
