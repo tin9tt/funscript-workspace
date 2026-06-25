@@ -17,6 +17,8 @@ export type FullscreenOverlayProps = {
   onManualPlayToggle: (playing: boolean) => void
   hasScript: boolean
   hasConnectedDevice: boolean
+  isDeviceSyncEnabled: boolean
+  onDeviceSyncToggle: (enabled: boolean) => void
 }
 
 type Props = FullscreenOverlayProps & {
@@ -34,6 +36,8 @@ export const FullscreenControlOverlay = ({
   onManualPlayToggle,
   hasScript,
   hasConnectedDevice,
+  isDeviceSyncEnabled,
+  onDeviceSyncToggle,
   onClose,
 }: Props) => {
   const handleInvertToggle = (checked: boolean) =>
@@ -105,6 +109,18 @@ export const FullscreenControlOverlay = ({
           {isMediaPlaying ? <FiPause size={20} /> : <FiPlay size={20} />}
           {isMediaPlaying ? 'Pause' : 'Play'}
         </button>
+
+        {hasConnectedDevice && hasScript && (
+          <div
+            className={clsx('flex', 'items-center', 'justify-between', 'py-1')}
+          >
+            <span className={clsx('text-sm', 'font-medium')}>Sync Device</span>
+            <ToggleSwitch
+              checked={isDeviceSyncEnabled}
+              onChange={onDeviceSyncToggle}
+            />
+          </div>
+        )}
 
         {hasScript && (
           <div className={clsx('space-y-4')}>

@@ -228,11 +228,13 @@ export default function Scripts() {
   const { devices, requestDevices, ...device } = useDeviceContext()
   const hasConnectedDevice = Object.keys(devices).length > 0
   const hasScriptRef = useRef(false)
+  const isDeviceSyncEnabledRef = useRef(true)
+  const currentTimeRef = useRef(0)
 
   const { isPlaying, currentTime, duration, play, pause, seek } =
     useSeekContext(0, {
       preSeek: async (seekTime, isPlaying) => {
-        if (!hasScriptRef.current) {
+        if (!hasScriptRef.current || !isDeviceSyncEnabledRef.current) {
           return
         }
         console.log(
@@ -243,7 +245,7 @@ export default function Scripts() {
         await new Promise((resolve) => setTimeout(resolve, 500))
       },
       onSeek: async (seekTime, isPlaying) => {
-        if (!hasScriptRef.current) {
+        if (!hasScriptRef.current || !isDeviceSyncEnabledRef.current) {
           return
         }
         console.log(`Seeking device to ${seekTime} (isPlaying: ${isPlaying})`)
@@ -264,6 +266,7 @@ export default function Scripts() {
   } = useFile(duration)
   const hasScript = Boolean(tracks[0]?.script)
   hasScriptRef.current = hasScript
+  currentTimeRef.current = currentTime
 
   // OptionsPane expansion state
   const [isPaneExpanded, setIsPaneExpanded] = useState(false)
@@ -272,6 +275,8 @@ export default function Scripts() {
   const [isLoopEnabled, setIsLoopEnabled] = useState(false)
   const [isManualContinuousPlaying, setIsManualContinuousPlaying] =
     useState(false)
+  const [isDeviceSyncEnabled, setIsDeviceSyncEnabled] = useState(true)
+  isDeviceSyncEnabledRef.current = isDeviceSyncEnabled
 
   const debouncedContinuousSpeed = useDebouncedValue(
     option.continuous.speed,
@@ -351,14 +356,14 @@ export default function Scripts() {
     if (!hasConnectedDevice || !hasScript) {
       return
     }
-    if (isPlaying) {
-      device.seek(currentTime)
-      device.play(Date.now(), currentTime * 1000)
+    if (isPlaying && isDeviceSyncEnabled) {
+      device.seek(currentTimeRef.current)
+      device.play(Date.now(), currentTimeRef.current * 1000)
     } else {
       device.pause()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, hasConnectedDevice, hasScript])
+  }, [isPlaying, hasConnectedDevice, hasScript, isDeviceSyncEnabled])
 
   useEffect(() => {
     if (isPlaying) {
@@ -422,6 +427,8 @@ export default function Scripts() {
     onManualPlayToggle: setIsManualContinuousPlaying,
     hasScript,
     hasConnectedDevice,
+    isDeviceSyncEnabled,
+    onDeviceSyncToggle: setIsDeviceSyncEnabled,
   }
 
   return (
@@ -469,6 +476,19 @@ export default function Scripts() {
               disabled={isPlaying}
             />
           </div>
+
+          {/* Device Sync Toggle */}
+          {hasConnectedDevice && hasScript && (
+            <div className={clsx('flex', 'justify-start', 'gap-2')}>
+              <span className={clsx('text-sm', 'text-gray-600')}>
+                Sync Device:
+              </span>
+              <ToggleSwitch
+                checked={isDeviceSyncEnabled}
+                onChange={setIsDeviceSyncEnabled}
+              />
+            </div>
+          )}
         </div>
       </Card>
       {hasConnectedDevice && (
