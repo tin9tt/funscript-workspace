@@ -10,9 +10,10 @@ import { generateFileId } from '@/lib/utils/fileId'
 
 interface UseEditParams {
   canvasRef: RefObject<HTMLCanvasElement>
+  viewportTimeRange: number
 }
 
-export const useEdit = ({ canvasRef }: UseEditParams) => {
+export const useEdit = ({ canvasRef, viewportTimeRange }: UseEditParams) => {
   // 各サブフックを使用
   const select = useSelect()
   const playback = usePlayback()
@@ -148,6 +149,7 @@ export const useEdit = ({ canvasRef }: UseEditParams) => {
     selectedIndices: select.selectedIndices,
     lastSelectedIndex: select.lastSelectedIndex,
     currentTime: playback.currentTime,
+    viewportTimeRange,
     setSelected: select.setSelected,
     addSelected: select.addSelected,
     setRangeSelected: select.setRangeSelected,

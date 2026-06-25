@@ -6,7 +6,10 @@ import { useEdit } from '../_hooks/edit'
 import WaveSurfer from 'wavesurfer.js'
 import { calculateSpeed, isSpeedInRange } from '@/lib/funscript'
 
-const VIEWPORT_TIME_RANGE = 10 // 再生時刻の前後10秒を表示
+const VIEWPORT_TIME_RANGE_DEFAULT = 10
+const VIEWPORT_TIME_RANGE_MIN = 2
+const VIEWPORT_TIME_RANGE_MAX = 60
+const VIEWPORT_ZOOM_FACTOR = 1.15
 const SPECTROGRAM_TIME_SLICES = 384
 const SPECTROGRAM_WINDOW_SIZE = 2048
 const SPECTROGRAM_FFT_SIZE = 4096
@@ -261,8 +264,13 @@ export const FunscriptGraph = ({
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const [viewportTimeRange, setViewportTimeRange] = useState(
+    VIEWPORT_TIME_RANGE_DEFAULT,
+  )
+
   const edit = useEdit({
     canvasRef: canvasRef as React.RefObject<HTMLCanvasElement>,
+    viewportTimeRange,
   })
 
   const [peaks, setPeaks] = useState<(number[] | Float32Array)[] | null>(null)
@@ -280,6 +288,7 @@ export const FunscriptGraph = ({
     columnCount: number
     columnPixelWidth: number
     channelMode: SpectrogramChannelMode
+    viewportTimeRange: number
   } | null>(null)
   const spectrogramColumnRemainderRef = useRef(0)
   const spectrogramShiftBufferRef = useRef<HTMLCanvasElement | null>(null)
@@ -310,6 +319,22 @@ export const FunscriptGraph = ({
     if (!canSimplifyAlternating) return
     edit.simplifyAlternatingSelectedRange()
   }, [canSimplifyAlternating, edit])
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLCanvasElement>) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const direction = e.deltaY > 0 ? 1 : -1
+      setViewportTimeRange((prev) => {
+        const next = prev * Math.pow(VIEWPORT_ZOOM_FACTOR, direction)
+        return Math.max(
+          VIEWPORT_TIME_RANGE_MIN,
+          Math.min(VIEWPORT_TIME_RANGE_MAX, next),
+        )
+      })
+    },
+    [],
+  )
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
@@ -406,9 +431,9 @@ export const FunscriptGraph = ({
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
 
-    // 描画範囲：再生時刻の前後10秒（必ず20秒幅）
-    const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
-    const viewDuration = VIEWPORT_TIME_RANGE * 2 // 常に20秒
+    // 描画範囲：再生時刻の前後N秒
+    const startTimeSec = currentTimeSec - viewportTimeRange
+    const viewDuration = viewportTimeRange * 2
 
     const { width, height } = canvas
 
@@ -478,7 +503,7 @@ export const FunscriptGraph = ({
         ctx.fillRect(i, bottomY, 1, bottomBarHeight)
       }
     }
-  }, [displayMode, duration, edit.currentTime, peaks])
+  }, [displayMode, duration, edit.currentTime, peaks, viewportTimeRange])
 
   // スペクトラム背景を描画
   useEffect(() => {
@@ -496,14 +521,14 @@ export const FunscriptGraph = ({
     const width = containerWidth
     const height = 256
     const currentTimeSec = edit.currentTime / 1000
-    const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
+    const startTimeSec = currentTimeSec - viewportTimeRange
 
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width
       canvas.height = height
     }
 
-    const viewDuration = VIEWPORT_TIME_RANGE * 2
+    const viewDuration = viewportTimeRange * 2
     const leftChannel = decodedAudioData.leftData
     const rightChannel = decodedAudioData.rightData
     const centerChannel = decodedAudioData.centerData
@@ -690,7 +715,8 @@ export const FunscriptGraph = ({
       lastState.height === height &&
       lastState.columnCount === columnCount &&
       lastState.columnPixelWidth === columnPixelWidth &&
-      lastState.channelMode === spectrogramChannelMode
+      lastState.channelMode === spectrogramChannelMode &&
+      lastState.viewportTimeRange === viewportTimeRange
 
     if (!canScrollReuse) {
       ctx.clearRect(0, 0, width, height)
@@ -777,6 +803,7 @@ export const FunscriptGraph = ({
       columnCount,
       columnPixelWidth,
       channelMode: spectrogramChannelMode,
+      viewportTimeRange,
     }
   }, [
     decodedAudioData,
@@ -784,6 +811,7 @@ export const FunscriptGraph = ({
     duration,
     edit.currentTime,
     spectrogramChannelMode,
+    viewportTimeRange,
   ])
 
   // グラフを描画（再生時刻の前後10秒）
@@ -806,9 +834,9 @@ export const FunscriptGraph = ({
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
 
-    // 描画範囲：再生時刻の前後10秒（必ず20秒差）
-    const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
-    const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+    // 描画範囲：再生時刻の前後N秒
+    const startTimeSec = currentTimeSec - viewportTimeRange
+    const endTimeSec = currentTimeSec + viewportTimeRange
 
     // 座標変換関数（再生時刻を中心にした相対座標）
     const timeToX = (at: number) => {
@@ -1044,6 +1072,7 @@ export const FunscriptGraph = ({
     edit.selectedIndices,
     currentJobStateType,
     edit.currentTime,
+    viewportTimeRange,
   ])
 
   return (
@@ -1068,6 +1097,7 @@ export const FunscriptGraph = ({
           onMouseMove={edit.onMouseMove}
           onMouseUp={edit.onMouseUp}
           onClick={edit.onClick}
+          onWheel={handleWheel}
           className="absolute inset-0"
           style={{
             background: 'transparent',

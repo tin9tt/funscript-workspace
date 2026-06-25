@@ -20,6 +20,7 @@ interface UseGUIEditParams {
   selectedIndices: number[]
   lastSelectedIndex: number | null
   currentTime: number
+  viewportTimeRange: number
   setSelected: (indices: number[]) => void
   addSelected: (index: number) => void
   setRangeSelected: (startIndex: number, endIndex: number) => void

@@ -3,14 +3,13 @@
 import { useState, useCallback, useEffect, RefObject } from 'react'
 import { FunscriptAction } from '@/lib/funscript'
 
-const VIEWPORT_TIME_RANGE = 10 // 再生時刻の前後10秒を表示
-
 interface UseGUIEditInputHandleParams {
   canvasRef: RefObject<HTMLCanvasElement>
   actions: FunscriptAction[]
   selectedIndices: number[]
   lastSelectedIndex: number | null
   currentTime: number
+  viewportTimeRange: number
   setSelected: (indices: number[]) => void
   addSelected: (index: number) => void
   setRangeSelected: (startIndex: number, endIndex: number) => void
@@ -45,6 +44,7 @@ export const useGUIEditInputHandle = ({
   selectedIndices,
   lastSelectedIndex,
   currentTime,
+  viewportTimeRange,
   setSelected,
   addSelected,
   setRangeSelected,
@@ -71,8 +71,8 @@ export const useGUIEditInputHandle = ({
   const getCoordinateTransform = useCallback(
     (canvas: HTMLCanvasElement) => {
       const currentTimeSec = currentTime / 1000
-      const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
-      const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+      const startTimeSec = currentTimeSec - viewportTimeRange
+      const endTimeSec = currentTimeSec + viewportTimeRange
 
       const timeToX = (at: number) => {
         const timeSec = at / 1000
@@ -84,7 +84,7 @@ export const useGUIEditInputHandle = ({
 
       return { timeToX, posToY, startTimeSec, endTimeSec }
     },
-    [currentTime],
+    [currentTime, viewportTimeRange],
   )
 
   // 選択範囲の境界を計算
@@ -454,8 +454,8 @@ export const useGUIEditInputHandle = ({
       }
 
       const currentTimeSec = currentTime / 1000
-      const startTimeSec = currentTimeSec - VIEWPORT_TIME_RANGE
-      const endTimeSec = currentTimeSec + VIEWPORT_TIME_RANGE
+      const startTimeSec = currentTimeSec - viewportTimeRange
+      const endTimeSec = currentTimeSec + viewportTimeRange
       const viewDuration = (endTimeSec - startTimeSec) * 1000
 
       switch (dragMode) {
