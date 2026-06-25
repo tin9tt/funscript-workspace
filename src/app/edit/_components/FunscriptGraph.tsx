@@ -220,9 +220,9 @@ const computeStereoMaxPowerSpectrum = (
   }
 }
 
-const getSpectrogramColor = (normalized: number) => {
-  const value = Math.max(0, Math.min(1, normalized))
-
+// Module-level color LUT: 4096 pre-computed RGB entries for fast per-pixel lookup.
+// Replaces per-pixel string construction + canvas fillStyle assignment.
+const SPECTROGRAM_COLOR_LUT = (() => {
   const stops = [
     { at: 0, rgb: [0, 0, 0] },
     { at: 0.1, rgb: [0, 0, 0] },
@@ -233,23 +233,28 @@ const getSpectrogramColor = (normalized: number) => {
     { at: 0.9, rgb: [255, 190, 40] },
     { at: 1, rgb: [255, 255, 210] },
   ] as const
-
-  const upperIndex = stops.findIndex((stop) => value <= stop.at)
-  if (upperIndex <= 0) {
-    const [r, g, b] = stops[0].rgb
-    return `rgb(${r}, ${g}, ${b})`
+  const LUT_SIZE = 4096
+  const lut = new Uint8Array(LUT_SIZE * 3)
+  for (let i = 0; i < LUT_SIZE; i++) {
+    const value = i / (LUT_SIZE - 1)
+    const upperIndex = stops.findIndex((stop) => value <= stop.at)
+    let r: number, g: number, b: number
+    if (upperIndex <= 0) {
+      ;[r, g, b] = stops[0].rgb
+    } else {
+      const lower = stops[upperIndex - 1]
+      const upper = stops[upperIndex]
+      const ratio = (value - lower.at) / (upper.at - lower.at)
+      r = Math.round(lower.rgb[0] + (upper.rgb[0] - lower.rgb[0]) * ratio)
+      g = Math.round(lower.rgb[1] + (upper.rgb[1] - lower.rgb[1]) * ratio)
+      b = Math.round(lower.rgb[2] + (upper.rgb[2] - lower.rgb[2]) * ratio)
+    }
+    lut[i * 3] = r!
+    lut[i * 3 + 1] = g!
+    lut[i * 3 + 2] = b!
   }
-
-  const lower = stops[upperIndex - 1]
-  const upper = stops[upperIndex]
-  const ratio = (value - lower.at) / (upper.at - lower.at)
-
-  const r = Math.round(lower.rgb[0] + (upper.rgb[0] - lower.rgb[0]) * ratio)
-  const g = Math.round(lower.rgb[1] + (upper.rgb[1] - lower.rgb[1]) * ratio)
-  const b = Math.round(lower.rgb[2] + (upper.rgb[2] - lower.rgb[2]) * ratio)
-
-  return `rgb(${r}, ${g}, ${b})`
-}
+  return lut
+})()
 
 export const FunscriptGraph = ({
   currentJobStateType,
@@ -292,6 +297,29 @@ export const FunscriptGraph = ({
   } | null>(null)
   const spectrogramColumnRemainderRef = useRef(0)
   const spectrogramShiftBufferRef = useRef<HTMLCanvasElement | null>(null)
+  // Scratch buffers for FFT computation — allocated once per sample-rate, reused across renders.
+  const spectrogramScratchRef = useRef<{
+    sampleRate: number
+    hannWindow: Float32Array
+    rowBinStart: Uint16Array
+    rowBinEnd: Uint16Array
+    scratchWindowed: Float32Array
+    scratchReal: Float32Array
+    scratchImag: Float32Array
+    fftPowers: Float32Array
+    leftFftPowers: Float32Array
+    rightFftPowers: Float32Array
+    rowAggregatedPowers: Float32Array
+  } | null>(null)
+  // Reused ImageData buffer for spectrogram column rendering (one putImageData per column).
+  const columnImageDataRef = useRef<ImageData | null>(null)
+  // Reused ImageData buffer for waveform rendering (one putImageData per frame).
+  const waveformImageDataRef = useRef<ImageData | null>(null)
+  // Debounced viewport range for the expensive spectrogram full-redraw (FFT computation).
+  // The graph overlay uses viewportTimeRange directly for immediate visual feedback.
+  const [spectrogramViewportTimeRange, setSpectrogramViewportTimeRange] =
+    useState(VIEWPORT_TIME_RANGE_DEFAULT)
+  const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canEqualize = useMemo(() => {
     const indices = [...edit.selectedIndices].sort((a, b) => a - b)
@@ -326,15 +354,29 @@ export const FunscriptGraph = ({
       e.preventDefault()
       const direction = e.deltaY > 0 ? 1 : -1
       setViewportTimeRange((prev) => {
-        const next = prev * Math.pow(VIEWPORT_ZOOM_FACTOR, direction)
-        return Math.max(
+        const next = clamp(
+          prev * Math.pow(VIEWPORT_ZOOM_FACTOR, direction),
           VIEWPORT_TIME_RANGE_MIN,
-          Math.min(VIEWPORT_TIME_RANGE_MAX, next),
+          VIEWPORT_TIME_RANGE_MAX,
         )
+        // Debounce the heavy FFT recompute; graph overlay updates immediately via viewportTimeRange.
+        if (zoomDebounceRef.current !== null) clearTimeout(zoomDebounceRef.current)
+        zoomDebounceRef.current = setTimeout(() => {
+          setSpectrogramViewportTimeRange(next)
+          zoomDebounceRef.current = null
+        }, 150)
+        return next
       })
     },
     [],
   )
+
+  // Clean up debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (zoomDebounceRef.current !== null) clearTimeout(zoomDebounceRef.current)
+    }
+  }, [])
 
   // メディアファイルからピークデータを抽出
   useEffect(() => {
@@ -409,7 +451,7 @@ export const FunscriptGraph = ({
     }
   }, [edit.file])
 
-  // 波形背景を描画
+  // 波形背景を描画 — ImageData で一括書き込みし Canvas API 呼び出しを最小化
   useEffect(() => {
     if (displayMode !== 'waveform') return
 
@@ -423,42 +465,26 @@ export const FunscriptGraph = ({
     const containerWidth = container.clientWidth
     const currentTimeSec = edit.currentTime / 1000
 
-    // Canvas サイズを設定
     if (canvas.width !== containerWidth || canvas.height !== 256) {
       canvas.width = containerWidth
       canvas.height = 256
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
 
-    // 描画範囲：再生時刻の前後N秒
     const startTimeSec = currentTimeSec - viewportTimeRange
     const viewDuration = viewportTimeRange * 2
-
     const { width, height } = canvas
 
-    // ステレオ（2チャンネル）として描画
     const channelCount = Math.min(peaks.length, 2)
     const channelData = peaks.slice(0, channelCount)
+    if (channelData.length === 1) channelData.push(channelData[0])
 
-    // モノラルの場合は同じデータを2回使用
-    if (channelData.length === 1) {
-      channelData.push(channelData[0])
-    }
-
-    // 上チャンネル（上半分）
     const topChannel = channelData[0]
-    const topHalfHeight = height / 2
-
-    // 下チャンネル（下半分）
     const bottomChannel = channelData[1]
+    const topHalfHeight = height / 2
     const bottomHalfHeight = height / 2
     const bottomY = height / 2
-
-    // サンプルレートを計算
     const sampleRate = topChannel.length / duration
 
-    // 正規化: チャンネルごとの最大値を求める
     let topMaxValue = 0
     let bottomMaxValue = 0
     for (let i = 0; i < topChannel.length; i++) {
@@ -467,45 +493,65 @@ export const FunscriptGraph = ({
       if (topAbs > topMaxValue) topMaxValue = topAbs
       if (bottomAbs > bottomMaxValue) bottomMaxValue = bottomAbs
     }
-
-    // 最大値が0の場合は1にして除算エラーを回避
     if (topMaxValue === 0) topMaxValue = 1
     if (bottomMaxValue === 0) bottomMaxValue = 1
 
-    // 各ピクセル列ごとに棒グラフを描画
-    for (let i = 0; i < width; i++) {
-      // 現在のピクセル位置に対応する時刻を計算
-      const pixelTimeSec = startTimeSec + (i / width) * viewDuration
+    // Reuse ImageData buffer to avoid per-frame allocation
+    if (
+      !waveformImageDataRef.current ||
+      waveformImageDataRef.current.width !== width ||
+      waveformImageDataRef.current.height !== height
+    ) {
+      waveformImageDataRef.current = new ImageData(width, height)
+    }
+    const imageData = waveformImageDataRef.current
+    // Clear to transparent (all zeros = rgba(0,0,0,0)); white bg shows through from CSS.
+    imageData.data.fill(0)
+    const data = imageData.data
 
-      // マイナスの時刻や範囲外の時刻はスキップ
-      if (pixelTimeSec < 0 || pixelTimeSec > duration) {
-        continue
-      }
+    for (let i = 0; i < width; i++) {
+      const pixelTimeSec = startTimeSec + (i / width) * viewDuration
+      if (pixelTimeSec < 0 || pixelTimeSec > duration) continue
 
       const sampleIndex = Math.floor(pixelTimeSec * sampleRate)
+      if (sampleIndex < 0 || sampleIndex >= topChannel.length) continue
 
-      if (sampleIndex >= 0 && sampleIndex < topChannel.length) {
-        // 進行状況に応じて色を変更
-        const isPlayed = pixelTimeSec <= currentTimeSec
-        ctx.fillStyle = isPlayed
-          ? 'rgba(59, 130, 246, 0.5)'
-          : 'rgba(148, 163, 184, 0.5)'
+      const isPlayed = pixelTimeSec <= currentTimeSec
+      // rgba(59, 130, 246, 0.5) for played, rgba(148, 163, 184, 0.5) for unplayed
+      const r = isPlayed ? 59 : 148
+      const g = isPlayed ? 130 : 163
+      const b = isPlayed ? 246 : 184
+      const a = 128 // 0.5 opacity
 
-        // 上チャンネルの棒グラフ（中央から上に伸びる）- 正規化適用
-        const topValue = Math.abs(topChannel[sampleIndex]) / topMaxValue
-        const topBarHeight = topValue * topHalfHeight
-        ctx.fillRect(i, topHalfHeight - topBarHeight, 1, topBarHeight)
+      const topValue = Math.abs(topChannel[sampleIndex]) / topMaxValue
+      const topBarHeight = Math.floor(topValue * topHalfHeight)
+      const topStart = Math.floor(topHalfHeight - topBarHeight)
 
-        // 下チャンネルの棒グラフ（中央から下に伸びる）- 正規化適用
-        const bottomValue =
-          Math.abs(bottomChannel[sampleIndex]) / bottomMaxValue
-        const bottomBarHeight = bottomValue * bottomHalfHeight
-        ctx.fillRect(i, bottomY, 1, bottomBarHeight)
+      const bottomValue = Math.abs(bottomChannel[sampleIndex]) / bottomMaxValue
+      const bottomBarHeight = Math.floor(bottomValue * bottomHalfHeight)
+      const bottomEnd = Math.floor(bottomY + bottomBarHeight)
+
+      for (let y = topStart; y < Math.floor(topHalfHeight); y++) {
+        const idx = (y * width + i) * 4
+        data[idx] = r
+        data[idx + 1] = g
+        data[idx + 2] = b
+        data[idx + 3] = a
+      }
+      for (let y = Math.floor(bottomY); y < bottomEnd; y++) {
+        const idx = (y * width + i) * 4
+        data[idx] = r
+        data[idx + 1] = g
+        data[idx + 2] = b
+        data[idx + 3] = a
       }
     }
+
+    ctx.putImageData(imageData, 0, 0)
   }, [displayMode, duration, edit.currentTime, peaks, viewportTimeRange])
 
-  // スペクトラム背景を描画
+  // スペクトラム背景を描画 — バッファ再利用・ImageData 一括書き込みで高速化
+  // spectrogramViewportTimeRange を使用し、ズーム操作中は旧スケールを維持（デバウンス後に更新）
   useEffect(() => {
     if (displayMode !== 'spectrum') return
     if (!decodedAudioData || duration === 0) return
@@ -521,14 +567,14 @@ export const FunscriptGraph = ({
     const width = containerWidth
     const height = 256
     const currentTimeSec = edit.currentTime / 1000
-    const startTimeSec = currentTimeSec - viewportTimeRange
+    const startTimeSec = currentTimeSec - spectrogramViewportTimeRange
 
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width
       canvas.height = height
     }
 
-    const viewDuration = viewportTimeRange * 2
+    const viewDuration = spectrogramViewportTimeRange * 2
     const leftChannel = decodedAudioData.leftData
     const rightChannel = decodedAudioData.rightData
     const centerChannel = decodedAudioData.centerData
@@ -543,35 +589,69 @@ export const FunscriptGraph = ({
     const columnCount = Math.max(1, Math.floor(width / columnPixelWidth))
     const spectrogramWidth = columnCount * columnPixelWidth
     const rowCount = height
-
-    const scratchWindowed = new Float32Array(SPECTROGRAM_WINDOW_SIZE)
-    const scratchReal = new Float32Array(SPECTROGRAM_FFT_SIZE)
-    const scratchImag = new Float32Array(SPECTROGRAM_FFT_SIZE)
     const nyquistBin = Math.floor(SPECTROGRAM_FFT_SIZE / 2)
-    const fftPowers = new Float32Array(nyquistBin + 1)
-    const leftFftPowers = new Float32Array(nyquistBin + 1)
-    const rightFftPowers = new Float32Array(nyquistBin + 1)
-    const rowAggregatedPowers = new Float32Array(rowCount)
 
-    const hannWindow = new Float32Array(SPECTROGRAM_WINDOW_SIZE)
-    for (let i = 0; i < SPECTROGRAM_WINDOW_SIZE; i++) {
-      hannWindow[i] =
-        0.5 * (1 - Math.cos((2 * Math.PI * i) / (SPECTROGRAM_WINDOW_SIZE - 1)))
+    // Initialize scratch buffers once per sample rate; reuse across renders to avoid GC pressure.
+    if (
+      !spectrogramScratchRef.current ||
+      spectrogramScratchRef.current.sampleRate !== sampleRate
+    ) {
+      const hannWindow = new Float32Array(SPECTROGRAM_WINDOW_SIZE)
+      for (let i = 0; i < SPECTROGRAM_WINDOW_SIZE; i++) {
+        hannWindow[i] =
+          0.5 *
+          (1 - Math.cos((2 * Math.PI * i) / (SPECTROGRAM_WINDOW_SIZE - 1)))
+      }
+      const nyquistHz = sampleRate / 2
+      const minFreqHz = SPECTROGRAM_MIN_FREQ_HZ
+      const maxFreqHz = Math.min(16000, nyquistHz)
+      const rowBinStart = new Uint16Array(rowCount)
+      const rowBinEnd = new Uint16Array(rowCount)
+      for (let row = 0; row < rowCount; row++) {
+        const freqTop = yToFrequency(row, rowCount, minFreqHz, maxFreqHz)
+        const freqBottom = yToFrequency(row + 1, rowCount, minFreqHz, maxFreqHz)
+        const start = Math.floor((freqBottom * SPECTROGRAM_FFT_SIZE) / sampleRate)
+        const end = Math.ceil((freqTop * SPECTROGRAM_FFT_SIZE) / sampleRate)
+        rowBinStart[row] = clamp(start, 0, nyquistBin)
+        rowBinEnd[row] = clamp(end, 0, nyquistBin)
+      }
+      spectrogramScratchRef.current = {
+        sampleRate,
+        hannWindow,
+        rowBinStart,
+        rowBinEnd,
+        scratchWindowed: new Float32Array(SPECTROGRAM_WINDOW_SIZE),
+        scratchReal: new Float32Array(SPECTROGRAM_FFT_SIZE),
+        scratchImag: new Float32Array(SPECTROGRAM_FFT_SIZE),
+        fftPowers: new Float32Array(nyquistBin + 1),
+        leftFftPowers: new Float32Array(nyquistBin + 1),
+        rightFftPowers: new Float32Array(nyquistBin + 1),
+        rowAggregatedPowers: new Float32Array(rowCount),
+      }
     }
+    const {
+      hannWindow,
+      rowBinStart,
+      rowBinEnd,
+      scratchWindowed,
+      scratchReal,
+      scratchImag,
+      fftPowers,
+      leftFftPowers,
+      rightFftPowers,
+      rowAggregatedPowers,
+    } = spectrogramScratchRef.current
 
-    const nyquistHz = sampleRate / 2
-    const minFreqHz = SPECTROGRAM_MIN_FREQ_HZ
-    const maxFreqHz = Math.min(16000, nyquistHz)
-    const rowBinStart = new Uint16Array(rowCount)
-    const rowBinEnd = new Uint16Array(rowCount)
-    for (let row = 0; row < rowCount; row++) {
-      const freqTop = yToFrequency(row, rowCount, minFreqHz, maxFreqHz)
-      const freqBottom = yToFrequency(row + 1, rowCount, minFreqHz, maxFreqHz)
-      const start = Math.floor((freqBottom * SPECTROGRAM_FFT_SIZE) / sampleRate)
-      const end = Math.ceil((freqTop * SPECTROGRAM_FFT_SIZE) / sampleRate)
-      rowBinStart[row] = clamp(start, 0, nyquistBin)
-      rowBinEnd[row] = clamp(end, 0, nyquistBin)
+    // Reuse per-column ImageData buffer; one putImageData call per column replaces 256 fillRect calls.
+    if (
+      !columnImageDataRef.current ||
+      columnImageDataRef.current.width !== columnPixelWidth ||
+      columnImageDataRef.current.height !== height
+    ) {
+      columnImageDataRef.current = new ImageData(columnPixelWidth, height)
     }
+    const columnImageData = columnImageDataRef.current
+
     const floorDb = SPECTROGRAM_TOP_DB - SPECTROGRAM_DYNAMIC_RANGE_DB
     const maxFrameIndex = Math.ceil(
       (audioDurationSec * sampleRate) / SPECTROGRAM_HOP_SIZE,
@@ -587,7 +667,7 @@ export const FunscriptGraph = ({
       const x = column * columnPixelWidth
 
       if (nextTimeSec < 0 || timeSec > audioDurationSec) {
-        ctx.fillStyle = getSpectrogramColor(0)
+        ctx.fillStyle = '#000000'
         ctx.fillRect(x, 0, columnPixelWidth, height)
         return
       }
@@ -695,6 +775,8 @@ export const FunscriptGraph = ({
         }
       }
 
+      // Write pixels via ImageData: 1 putImageData call vs. 256 fillStyle+fillRect calls.
+      const imgData = columnImageData.data
       for (let row = 0; row < rowCount; row++) {
         const pixelDb =
           10 * Math.log10(Math.max(rowAggregatedPowers[row], 1e-20))
@@ -703,9 +785,20 @@ export const FunscriptGraph = ({
           0,
           1,
         )
-        ctx.fillStyle = getSpectrogramColor(mapIntensity(normalized))
-        ctx.fillRect(x, row, columnPixelWidth, 1)
+        const lutIdx = Math.min(4095, Math.floor(mapIntensity(normalized) * 4095)) * 3
+        const r = SPECTROGRAM_COLOR_LUT[lutIdx]
+        const g = SPECTROGRAM_COLOR_LUT[lutIdx + 1]
+        const b = SPECTROGRAM_COLOR_LUT[lutIdx + 2]
+        const rowBase = row * columnPixelWidth * 4
+        for (let px = 0; px < columnPixelWidth; px++) {
+          const dataIdx = rowBase + px * 4
+          imgData[dataIdx] = r
+          imgData[dataIdx + 1] = g
+          imgData[dataIdx + 2] = b
+          imgData[dataIdx + 3] = 255
+        }
       }
+      ctx.putImageData(columnImageData, x, 0)
     }
 
     const lastState = lastSpectrogramStateRef.current
@@ -716,7 +809,7 @@ export const FunscriptGraph = ({
       lastState.columnCount === columnCount &&
       lastState.columnPixelWidth === columnPixelWidth &&
       lastState.channelMode === spectrogramChannelMode &&
-      lastState.viewportTimeRange === viewportTimeRange
+      lastState.viewportTimeRange === spectrogramViewportTimeRange
 
     if (!canScrollReuse) {
       ctx.clearRect(0, 0, width, height)
@@ -724,7 +817,7 @@ export const FunscriptGraph = ({
         drawSpectrogramColumn(column, startTimeSec)
       }
       if (spectrogramWidth < width) {
-        ctx.fillStyle = getSpectrogramColor(0)
+        ctx.fillStyle = '#000000'
         ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
       }
       spectrogramColumnRemainderRef.current = 0
@@ -746,7 +839,7 @@ export const FunscriptGraph = ({
             drawSpectrogramColumn(column, startTimeSec)
           }
           if (spectrogramWidth < width) {
-            ctx.fillStyle = getSpectrogramColor(0)
+            ctx.fillStyle = '#000000'
             ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
           }
         } else {
@@ -789,7 +882,7 @@ export const FunscriptGraph = ({
             }
           }
           if (spectrogramWidth < width) {
-            ctx.fillStyle = getSpectrogramColor(0)
+            ctx.fillStyle = '#000000'
             ctx.fillRect(spectrogramWidth, 0, width - spectrogramWidth, height)
           }
         }
@@ -803,7 +896,7 @@ export const FunscriptGraph = ({
       columnCount,
       columnPixelWidth,
       channelMode: spectrogramChannelMode,
-      viewportTimeRange,
+      viewportTimeRange: spectrogramViewportTimeRange,
     }
   }, [
     decodedAudioData,
@@ -811,7 +904,7 @@ export const FunscriptGraph = ({
     duration,
     edit.currentTime,
     spectrogramChannelMode,
-    viewportTimeRange,
+    spectrogramViewportTimeRange,
   ])
 
   // グラフを描画（再生時刻の前後10秒）
