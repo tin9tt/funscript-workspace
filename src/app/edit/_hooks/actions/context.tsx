@@ -26,6 +26,10 @@ export type ActionsAction =
       payload: { startIndex: number; endIndex: number }
     }
   | {
+      kind: 'reduce-frequency'
+      payload: { startIndex: number; endIndex: number; factor: number }
+    }
+  | {
       kind: 'update-selected'
       payload: {
         indices: number[]
@@ -84,6 +88,54 @@ const equalizeIntervalsInRange = (
   }
 
   return newActions
+}
+
+/**
+ * 選択範囲内のアクションを指定した頻度比率で間引く。
+ * 交互パターン（A-B-A-B...）を維持しながら newCount 個に圧縮し、
+ * 開始〜終了間を等間隔に再配置する。
+ */
+const reduceFrequencyInRange = (
+  actions: FunscriptAction[],
+  startIndex: number,
+  endIndex: number,
+  factor: number,
+): FunscriptAction[] | null => {
+  if (
+    startIndex < 0 ||
+    endIndex >= actions.length ||
+    startIndex >= endIndex ||
+    factor < 2
+  ) {
+    return null
+  }
+
+  const n = endIndex - startIndex + 1
+  const newCount = Math.floor((n - 1) / factor) + 1
+  if (newCount < 2) return null
+
+  const startAt = actions[startIndex].at
+  const endAt = actions[endIndex].at
+  const span = endAt - startAt
+  if (span <= 0) return null
+
+  const firstPos = actions[startIndex].pos
+  const secondPos = actions[startIndex + 1].pos
+  const step = span / (newCount - 1)
+
+  const replacement: FunscriptAction[] = Array.from(
+    { length: newCount },
+    (_, i) => ({
+      at: i === newCount - 1 ? endAt : Math.round(startAt + step * i),
+      pos: i % 2 === 0 ? firstPos : secondPos,
+    }),
+  )
+
+  return [
+    ...actions.slice(0, startIndex),
+    ...replacement,
+    ...actions.slice(endIndex + 1),
+  ]
 }
 
 const actionsReducer = (
@@ -172,6 +224,19 @@ const actionsReducer = (
       if (!newActions) return state
 
       newActions.sort((a, b) => a.at - b.at)
+      return saveToHistory(state, newActions)
+    }
+
+    case 'reduce-frequency': {
+      const newActions = reduceFrequencyInRange(
+        state.actions,
+        action.payload.startIndex,
+        action.payload.endIndex,
+        action.payload.factor,
+      )
+
+      if (!newActions) return state
+
       return saveToHistory(state, newActions)
     }
 

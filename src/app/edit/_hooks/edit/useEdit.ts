@@ -123,6 +123,27 @@ export const useEdit = ({ canvasRef, viewportTimeRange }: UseEditParams) => {
     select.clearSelected,
   ])
 
+  const reduceFrequencySelectedRange = useCallback(
+    (factor: number) => {
+      const indices = [...select.selectedIndices].sort((a, b) => a - b)
+      if (indices.length < 3) return false
+
+      const isContinuous = indices.every(
+        (index, i) => i === 0 || index === indices[i - 1] + 1,
+      )
+
+      if (!isContinuous) return false
+
+      const startIndex = indices[0]
+      const endIndex = indices[indices.length - 1]
+
+      actionsHook.reduceFrequency(startIndex, endIndex, factor)
+      select.clearSelected()
+      return true
+    },
+    [select.selectedIndices, actionsHook.reduceFrequency, select.clearSelected],
+  )
+
   // localStorage からデータを読み込む
   useEffect(() => {
     if (!playback.file) return
@@ -164,6 +185,7 @@ export const useEdit = ({ canvasRef, viewportTimeRange }: UseEditParams) => {
     ...actionsHook,
     equalizeSelectedRange,
     simplifyAlternatingSelectedRange,
+    reduceFrequencySelectedRange,
     // Playback
     ...playback,
     // GUI Edit

@@ -338,6 +338,36 @@ export const FunscriptGraph = ({
 
   const canSimplifyAlternating = canEqualize
 
+  const canReduceFrequencyHalf = useMemo(() => {
+    const indices = [...edit.selectedIndices].sort((a, b) => a - b)
+    if (indices.length < 3) return false
+
+    const continuous = indices.every(
+      (index, i) => i === 0 || index === indices[i - 1] + 1,
+    )
+
+    const withinBounds =
+      indices[0] >= 0 &&
+      indices[indices.length - 1] < edit.effectiveActions.length
+
+    return continuous && withinBounds
+  }, [edit.selectedIndices, edit.effectiveActions.length])
+
+  const canReduceFrequencyThird = useMemo(() => {
+    const indices = [...edit.selectedIndices].sort((a, b) => a - b)
+    if (indices.length < 4) return false
+
+    const continuous = indices.every(
+      (index, i) => i === 0 || index === indices[i - 1] + 1,
+    )
+
+    const withinBounds =
+      indices[0] >= 0 &&
+      indices[indices.length - 1] < edit.effectiveActions.length
+
+    return continuous && withinBounds
+  }, [edit.selectedIndices, edit.effectiveActions.length])
+
   const handleEqualize = useCallback(() => {
     if (!canEqualize) return
     edit.equalizeSelectedRange()
@@ -347,6 +377,16 @@ export const FunscriptGraph = ({
     if (!canSimplifyAlternating) return
     edit.simplifyAlternatingSelectedRange()
   }, [canSimplifyAlternating, edit])
+
+  const handleReduceFrequencyHalf = useCallback(() => {
+    if (!canReduceFrequencyHalf) return
+    edit.reduceFrequencySelectedRange(2)
+  }, [canReduceFrequencyHalf, edit])
+
+  const handleReduceFrequencyThird = useCallback(() => {
+    if (!canReduceFrequencyThird) return
+    edit.reduceFrequencySelectedRange(3)
+  }, [canReduceFrequencyThird, edit])
 
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -1242,6 +1282,22 @@ export const FunscriptGraph = ({
           className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
         >
           上限交互に単純化
+        </button>
+        <button
+          type="button"
+          onClick={handleReduceFrequencyHalf}
+          disabled={!canReduceFrequencyHalf}
+          className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          1/2に間引く
+        </button>
+        <button
+          type="button"
+          onClick={handleReduceFrequencyThird}
+          disabled={!canReduceFrequencyThird}
+          className="px-4 py-2 rounded bg-primary-variant text-primary-content disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          1/3に間引く
         </button>
       </div>
     </div>

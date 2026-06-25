@@ -82,6 +82,16 @@ export const useActions = (
     [dispatch],
   )
 
+  const reduceFrequency = useCallback(
+    (startIndex: number, endIndex: number, factor: number) => {
+      dispatch({
+        kind: 'reduce-frequency',
+        payload: { startIndex, endIndex, factor },
+      })
+    },
+    [dispatch],
+  )
+
   // Persist actions to storage when they change
   useEffect(() => {
     if (_savePersistent && file && state.actions.length > 0) {
@@ -103,5 +113,6 @@ export const useActions = (
     redo,
     updateSelectedFromBase,
     equalizeIntervals,
+    reduceFrequency,
   }
 }
