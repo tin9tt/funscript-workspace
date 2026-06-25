@@ -4,7 +4,7 @@ import { usePlayback } from '../_hooks/playback'
 import { useEffect, useRef } from 'react'
 
 export const MediaPlayer = () => {
-  const { file, isPlaying, currentTime, setCurrentTime, setPlaying } =
+  const { file, isPlaying, currentTime, pendingSeek, setCurrentTime, setPlaying, clearSeek } =
     usePlayback()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -49,6 +49,18 @@ export const MediaPlayer = () => {
       mediaElement.pause()
     }
   }, [isPlaying, isVideo, setPlaying])
+
+  // シークリクエストの処理
+  useEffect(() => {
+    if (pendingSeek === null) return
+
+    const mediaElement = isVideo ? videoRef.current : audioRef.current
+    if (mediaElement) {
+      mediaElement.currentTime = pendingSeek / 1000
+      setCurrentTime(pendingSeek)
+    }
+    clearSeek()
+  }, [pendingSeek, isVideo, setCurrentTime, clearSeek])
 
   // 高頻度で currentTime を更新 (requestAnimationFrame を使用)
   useEffect(() => {

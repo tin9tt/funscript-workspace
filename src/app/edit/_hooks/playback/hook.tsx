@@ -27,12 +27,26 @@ export const usePlayback = () => {
     [dispatch],
   )
 
+  const seekTo = useCallback(
+    (timeMs: number) => {
+      dispatch({ kind: 'seek', payload: { timeMs } })
+    },
+    [dispatch],
+  )
+
+  const clearSeek = useCallback(() => {
+    dispatch({ kind: 'clear-seek' })
+  }, [dispatch])
+
   return {
     file: state.file,
     isPlaying: state.isPlaying,
     currentTime: state.currentTime,
+    pendingSeek: state.pendingSeek,
     loadFile,
     setPlaying,
     setCurrentTime,
+    seekTo,
+    clearSeek,
   }
 }

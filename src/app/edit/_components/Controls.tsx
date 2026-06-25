@@ -11,7 +11,7 @@ import {
 } from '@/lib/funscript'
 
 export const Controls = () => {
-  const { file } = usePlayback()
+  const { file, seekTo } = usePlayback()
   const { actions, clearActions } = useActions(null)
   const { selectedIndices } = useSelect()
 
@@ -34,9 +34,14 @@ export const Controls = () => {
     const outOfRangeIndices = findOutOfRangeSpeedSegments(sanitized.actions)
     if (outOfRangeIndices.length > 0) {
       const count = outOfRangeIndices.length
-      alert(
-        `速度が範囲外（20～80）のセグメントが${count}個検出されました。\nエクスポートを続行しますか？`,
+      const confirmed = confirm(
+        `速度が範囲外（5～80）のセグメントが${count}個検出されました。\nエクスポートを続行しますか？`,
       )
+      if (!confirmed) {
+        const firstSegmentAction = sanitized.actions[outOfRangeIndices[0]]
+        seekTo(firstSegmentAction.at)
+        return
+      }
     }
 
     // JSON に変換
@@ -57,7 +62,7 @@ export const Controls = () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [file, actions])
+  }, [file, actions, seekTo])
 
   const handleClear = useCallback(() => {
     if (!file) return
